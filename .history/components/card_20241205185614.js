@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+// components/card.js
 import Link from 'next/link';
 
 const Card = ({ image, name, location, link, distance, difficulty, rating }) => (

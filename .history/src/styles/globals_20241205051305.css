@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  @apply bg-custom-bg; /* Menggunakan kelas warna latar yang baru ditambahkan */
+}
+
