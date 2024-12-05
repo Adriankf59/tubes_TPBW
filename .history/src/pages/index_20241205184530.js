@@ -1,7 +1,7 @@
 import Head from 'next/head';
 import { useState, useEffect } from 'react';
-import Card from '../../components/card';
-import Footer from '../../components/footer';
+import Card from '../components/Card';
+import Footer from '../components/Footer';
 
 export default function Home({ mountains }) {
   const [currentIndex, setCurrentIndex] = useState(0);
