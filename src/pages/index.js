@@ -1,19 +1,22 @@
-import Head from 'next/head';
-import { useState, useEffect } from 'react';
-import Card from '../../components/card';
-import Footer from '../../components/footer';
+import Head from 'next/head';  // Mengimpor komponen Head untuk mengelola tag <head> di halaman
+import { useState, useEffect } from 'react';  // Mengimpor hooks useState dan useEffect dari React
+import Card from '../../components/card';  // Mengimpor komponen Card
+import Footer from '../../components/footer';  // Mengimpor komponen Footer
 
 export default function Home({ mountains }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isClient, setIsClient] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filteredMountains, setFilteredMountains] = useState([]);
-  const [selectedProvince, setSelectedProvince] = useState("All");
+  // Deklarasi state menggunakan useState hook
+  const [currentIndex, setCurrentIndex] = useState(0);  // State untuk menyimpan indeks saat ini dari tampilan data
+  const [isClient, setIsClient] = useState(false);  // State untuk menentukan apakah komponen dijalankan di sisi klien
+  const [searchTerm, setSearchTerm] = useState("");  // State untuk menyimpan istilah pencarian
+  const [filteredMountains, setFilteredMountains] = useState([]);  // State untuk menyimpan daftar gunung yang difilter
+  const [selectedProvince, setSelectedProvince] = useState("All");  // State untuk menyimpan provinsi yang dipilih
 
+  // useEffect dijalankan setelah komponen dirender di sisi klien
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  // Fungsi untuk mengatur indeks ke tampilan berikutnya
   const handleNext = () => {
     const nextIndex = currentIndex + 4;
     if (nextIndex < getCurrentMountains().length) {
@@ -21,6 +24,7 @@ export default function Home({ mountains }) {
     }
   };
 
+  // Fungsi untuk mengatur indeks ke tampilan sebelumnya
   const handlePrev = () => {
     const prevIndex = currentIndex - 4;
     if (prevIndex >= 0) {
@@ -28,6 +32,7 @@ export default function Home({ mountains }) {
     }
   };
 
+  // Fungsi untuk menangani perubahan pada input pencarian
   const handleSearchChange = (e) => {
     const value = e.target.value.toLowerCase();
     setSearchTerm(value);
@@ -41,11 +46,13 @@ export default function Home({ mountains }) {
     }
   };
 
+  // Fungsi untuk menangani perubahan pemilihan provinsi
   const handleProvinceChange = (e) => {
     setSelectedProvince(e.target.value);
-    setCurrentIndex(0);  // Reset index when province changes
+    setCurrentIndex(0);  // Reset indeks ketika provinsi berubah
   };
 
+  // Fungsi untuk mendapatkan daftar gunung saat ini berdasarkan filter
   const getCurrentMountains = () => {
     let currentMountains = mountains;
 
@@ -64,7 +71,8 @@ export default function Home({ mountains }) {
     return currentMountains;
   };
 
-  const uniqueProvinces = ["All", ...new Set(mountains.map(mountain => mountain.provinsi))];
+  // Mendapatkan daftar provinsi unik, mengurutkannya berdasarkan abjad, dan menambahkan "All" di atas
+  const uniqueProvinces = ["All", ...[...new Set(mountains.map(mountain => mountain.provinsi))].sort()];
 
   return (
     <>
@@ -174,15 +182,15 @@ export default function Home({ mountains }) {
 }
 
 export async function getStaticProps() {
-  const res = await fetch('http://127.0.0.1:8055/items/mountains');
-  const jsonData = await res.json();
+  const res = await fetch('http://127.0.0.1:8055/items/mountains');  // Mengambil data gunung dari Directus
+  const jsonData = await res.json();  // Mengubah respons menjadi format JSON
 
-  const mountains = jsonData.data;
+  const mountains = jsonData.data;  // Menyimpan data gunung dari respons
 
   return {
     props: {
-      mountains,
+      mountains,  // Mengirim data gunung sebagai properti ke komponen
     },
-    revalidate: 10, // Re-generate the page at most once every 10 seconds
+    revalidate: 10, // Mere-generasi halaman setidaknya sekali setiap 10 detik
   };
 }
