@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';  // Mengimpor hooks useState dan us
 import Card from '../../components/card';  // Mengimpor komponen Card
 import Footer from '../../components/footer';  // Mengimpor komponen Footer
 
-export default function Home({ mountains }) {
+export default function Home({ mountains, error }) {
   // Deklarasi state menggunakan useState hook
   const [currentIndex, setCurrentIndex] = useState(0);  // State untuk menyimpan indeks saat ini dari tampilan data
   const [isClient, setIsClient] = useState(false);  // State untuk menentukan apakah komponen dijalankan di sisi klien
@@ -149,7 +149,7 @@ export default function Home({ mountains }) {
                 </button>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 flex-grow mx-4">
-                {isClient &&
+                {isClient && (!error ? (
                   getCurrentMountains().slice(currentIndex, currentIndex + 4).map((mountain) => (
                     <Card
                       key={mountain.id}
@@ -161,7 +161,10 @@ export default function Home({ mountains }) {
                       difficulty={mountain.difficulty}
                       rating={mountain.rating}
                     />
-                  ))}
+                  ))
+                ) : (
+                  <p className="text-center col-span-4">Data gunung tidak tersedia saat ini. Silakan coba lagi nanti.</p>
+                ))}
               </div>
               {isClient && currentIndex + 4 < getCurrentMountains().length && (
                 <button
@@ -182,15 +185,30 @@ export default function Home({ mountains }) {
 }
 
 export async function getStaticProps() {
-  const res = await fetch('http://127.0.0.1:8055/items/mountains');  // Mengambil data gunung dari Directus
-  const jsonData = await res.json();  // Mengubah respons menjadi format JSON
+  try {
+    const res = await fetch('http://127.0.0.1:8055/items/mountains');  // Mengambil data gunung dari Directus
+    if (!res.ok) {
+      throw new Error("API response error");
+    }
+    const jsonData = await res.json();  // Mengubah respons menjadi format JSON
 
-  const mountains = jsonData.data;  // Menyimpan data gunung dari respons
+    const mountains = jsonData.data;  // Menyimpan data gunung dari respons
 
-  return {
-    props: {
-      mountains,  // Mengirim data gunung sebagai properti ke komponen
-    },
-    revalidate: 10, // Mere-generasi halaman setidaknya sekali setiap 10 detik
-  };
+    return {
+      props: {
+        mountains,  // Mengirim data gunung sebagai properti ke komponen
+      },
+      revalidate: 10, // Mere-generasi halaman setidaknya sekali setiap 10 detik
+    };
+  } catch (error) {
+    console.error("Failed to fetch mountains data:", error);
+
+    return {
+      props: {
+        mountains: [],  // Mengirim daftar gunung kosong sebagai properti
+        error: "Unable to fetch mountains data",  // Mengirim pesan kesalahan sebagai properti
+      },
+      revalidate: 10, // Mere-generasi halaman setidaknya sekali setiap 10 detik
+    };
+  }
 }

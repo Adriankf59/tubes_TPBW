@@ -211,7 +211,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
   return (
     <>
       <Head>
-        <title>Hiking Route - {mountain.name}</title>
+        <title>Hiking Route - {mountain.name ?? "Data Not Available"}</title>
         <style>{`
           .map-container {
             height: 550px;  // Set the height of the map
@@ -328,54 +328,60 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
               <a className="text-green-600 hover:underline">Back to Explore</a>
             </Link>
             <p className="text-sm text-gray-600">
-              {mountain.location}
+              {mountain.location ?? "Location Not Available"}
             </p>
           </div>
           <h1 className="text-4xl font-bold text-green-800 mb-2">
-            {mountain.name}
+            {mountain.name ?? "Mountain Name Not Available"}
           </h1>
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="flex items-center">
-              <span className="text-black font-semibold">{mountain.rating}</span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span className="text-gray-600">{mountain.difficulty}</span>
-            </div>
-            <div className="flex space-x-6">
-              <div className="text-center">
-                <span className="block text-lg font-bold text-black">{mountain.distance} km</span>
-                <span className="text-sm text-gray-500">Distance</span>
+          {mountain ? (
+            <>
+              <div className="flex items-center space-x-4 mb-6">
+                <div className="flex items-center">
+                  <span className="text-black font-semibold">{mountain.rating}</span>
+                  <span className="mx-2 text-gray-400">·</span>
+                  <span className="text-gray-600">{mountain.difficulty}</span>
+                </div>
+                <div className="flex space-x-6">
+                  <div className="text-center">
+                    <span className="block text-lg font-bold text-black">{mountain.distance} km</span>
+                    <span className="text-sm text-gray-500">Distance</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="block text-lg font-bold text-black">
+                      {mountain.elevation_gain} m
+                    </span>
+                    <span className="text-sm text-gray-500">Elevation gain</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="block text-lg font-bold text-black">
+                      {mountain.estimated_time}
+                    </span>
+                    <span className="text-sm text-gray-500">Estimated time</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="block text-lg font-bold text-black">
+                      {mountain.type}
+                    </span>
+                    <span className="text-sm text-gray-500">Type</span>
+                  </div>
+                </div>
               </div>
-              <div className="text-center">
-                <span className="block text-lg font-bold text-black">
-                  {mountain.elevation_gain} m
-                </span>
-                <span className="text-sm text-gray-500">Elevation gain</span>
+              <div className="relative mb-6">
+                <img
+                  src={`http://localhost:8055/assets/${mountain.image}`}
+                  alt={mountain.name}
+                  className="w-full h-96 object-cover rounded-lg transition-transform duration-300"
+                />
               </div>
-              <div className="text-center">
-                <span className="block text-lg font-bold text-black">
-                  {mountain.estimated_time}
-                </span>
-                <span className="text-sm text-gray-500">Estimated time</span>
-              </div>
-              <div className="text-center">
-                <span className="block text-lg font-bold text-black">
-                  {mountain.type}
-                </span>
-                <span className="text-sm text-gray-500">Type</span>
-              </div>
-            </div>
-          </div>
-          <div className="relative mb-6">
-            <img
-              src={`http://localhost:8055/assets/${mountain.image}`}
-              alt={mountain.name}
-              className="w-full h-96 object-cover rounded-lg transition-transform duration-300"
-            />
-          </div>
+            </>
+          ) : (
+            <p className="text-red-600">Mountain data is not available at the moment. Please try again later.</p>
+          )}
         </section>
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <h2 className="text-xl font-bold text-green-800 mb-4">Overview</h2>
-          <div className="text-gray-700 mb-4" dangerouslySetInnerHTML={{ __html: mountain.penjelasan }}></div>
+          <div className="text-gray-700 mb-4" dangerouslySetInnerHTML={{ __html: mountain ? mountain.penjelasan : "Overview not available" }}></div>
           <h2 className="text-xl font-bold text-green-800 mb-4">Peta Jalur Pendakian</h2>
           <div className="map-container mb-6">
             <div className="action-buttons">
@@ -416,43 +422,65 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
 }
 
 export async function getStaticPaths() {
-  const res = await fetch('http://127.0.0.1:8055/items/mountains');
-  const jsonData = await res.json();
-  const mountains = jsonData.data;
+  try {
+    const res = await fetch('http://127.0.0.1:8055/items/mountains');
+    if (!res.ok) throw new Error('Failed to fetch mountain data');
+    const jsonData = await res.json();
+    const mountains = jsonData.data;
 
-  const paths = mountains.map((mountain) => ({
-    params: { id: mountain.id.toString() },
-  }));
+    const paths = mountains.map((mountain) => ({
+      params: { id: mountain.id.toString() },
+    }));
 
-  return {
-    paths,
-    fallback: 'blocking',
-  };
+    return {
+      paths,
+      fallback: 'blocking',
+    };
+  } catch (error) {
+    console.error("Error fetching mountain paths:", error);
+    return {
+      paths: [],
+      fallback: 'blocking',
+    };
+  }
 }
 
 export async function getStaticProps({ params }) {
-  const mountainRes = await fetch(`http://127.0.0.1:8055/items/mountains/${params.id}`);
-  const mountainData = await mountainRes.json();
-  const mountain = mountainData.data;
-
-  const pointKey = mountain.point || 'default';
-  const trackKey = mountain.track || 'default';
-
-  const resPoints = await fetch(`http://127.0.0.1:8055/items/${pointKey}`);
-  const pointsData = await resPoints.json();
-  const directusPoints = pointsData.data || [];
-
-  const resLines = await fetch(`http://127.0.0.1:8055/items/${trackKey}`);
-  const linesData = await resLines.json();
-  const directusLines = linesData.data || [];
-
+  let mountain = null;
+  let directusPoints = [];
+  let directusLines = [];
   let centerCoordinates = [107.601529, -6.917464]; // Default coordinates of Indonesia
 
-  if (directusPoints.length > 0) {
-    const pointIdOne = directusPoints.find(point => point.id === 1); 
-    if (pointIdOne && pointIdOne.geom) {
-      centerCoordinates = pointIdOne.geom.coordinates;
+  try {
+    const mountainRes = await fetch(`http://127.0.0.1:8055/items/mountains/${params.id}`);
+    if (!mountainRes.ok) throw new Error('Failed to fetch mountain data');
+    const mountainData = await mountainRes.json();
+    mountain = mountainData.data;
+
+    const pointKey = mountain.point || 'default';
+    const trackKey = mountain.track || 'default';
+
+    const resPoints = await fetch(`http://127.0.0.1:8055/items/${pointKey}`);
+    if (resPoints.ok) {
+      const pointsData = await resPoints.json();
+      directusPoints = pointsData.data || [];
     }
+
+    const resLines = await fetch(`http://127.0.0.1:8055/items/${trackKey}`);
+    if (resLines.ok) {
+      const linesData = await resLines.json();
+      directusLines = linesData.data || [];
+    }
+
+    if (directusPoints.length > 0) {
+      const pointIdOne = directusPoints.find(point => point.id === 1);
+      if (pointIdOne && pointIdOne.geom) {
+        centerCoordinates = pointIdOne.geom.coordinates;
+      }
+    }
+
+  } catch (error) {
+    console.error("Error fetching data:", error);
   }
 
   return {
