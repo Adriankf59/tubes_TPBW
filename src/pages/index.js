@@ -1,15 +1,15 @@
-import Head from 'next/head';  // Mengimpor komponen Head untuk mengelola tag <head> di halaman
-import { useState, useEffect } from 'react';  // Mengimpor hooks useState dan useEffect dari React
-import Card from '../../components/card';  // Mengimpor komponen Card
-import Footer from '../../components/footer';  // Mengimpor komponen Footer
+import Head from "next/head"; // Mengimpor komponen Head untuk mengelola tag <head> di halaman
+import { useState, useEffect } from "react"; // Mengimpor hooks useState dan useEffect dari React
+import Card from "../../components/card"; // Mengimpor komponen Card
+import Footer from "../../components/footer"; // Mengimpor komponen Footer
 
 export default function Home({ mountains, error }) {
   // Deklarasi state menggunakan useState hook
-  const [currentIndex, setCurrentIndex] = useState(0);  // State untuk menyimpan indeks saat ini dari tampilan data
-  const [isClient, setIsClient] = useState(false);  // State untuk menentukan apakah komponen dijalankan di sisi klien
-  const [searchTerm, setSearchTerm] = useState("");  // State untuk menyimpan istilah pencarian
-  const [filteredMountains, setFilteredMountains] = useState([]);  // State untuk menyimpan daftar gunung yang difilter
-  const [selectedProvince, setSelectedProvince] = useState("All");  // State untuk menyimpan provinsi yang dipilih
+  const [currentIndex, setCurrentIndex] = useState(0); // State untuk menyimpan indeks saat ini dari tampilan data
+  const [isClient, setIsClient] = useState(false); // State untuk menentukan apakah komponen dijalankan di sisi klien
+  const [searchTerm, setSearchTerm] = useState(""); // State untuk menyimpan istilah pencarian
+  const [filteredMountains, setFilteredMountains] = useState([]); // State untuk menyimpan daftar gunung yang difilter
+  const [selectedProvince, setSelectedProvince] = useState("All"); // State untuk menyimpan provinsi yang dipilih
 
   // useEffect dijalankan setelah komponen dirender di sisi klien
   useEffect(() => {
@@ -49,7 +49,7 @@ export default function Home({ mountains, error }) {
   // Fungsi untuk menangani perubahan pemilihan provinsi
   const handleProvinceChange = (e) => {
     setSelectedProvince(e.target.value);
-    setCurrentIndex(0);  // Reset indeks ketika provinsi berubah
+    setCurrentIndex(0); // Reset indeks ketika provinsi berubah
   };
 
   // Fungsi untuk mendapatkan daftar gunung saat ini berdasarkan filter
@@ -61,7 +61,7 @@ export default function Home({ mountains, error }) {
         (mountain) => mountain.provinsi === selectedProvince
       );
     }
-    
+
     if (filteredMountains.length > 0) {
       currentMountains = currentMountains.filter((mountain) =>
         filteredMountains.includes(mountain)
@@ -72,7 +72,10 @@ export default function Home({ mountains, error }) {
   };
 
   // Mendapatkan daftar provinsi unik, mengurutkannya berdasarkan abjad, dan menambahkan "All" di atas
-  const uniqueProvinces = ["All", ...[...new Set(mountains.map(mountain => mountain.provinsi))].sort()];
+  const uniqueProvinces = [
+    "All",
+    ...[...new Set(mountains.map((mountain) => mountain.provinsi))].sort(),
+  ];
 
   return (
     <>
@@ -81,13 +84,10 @@ export default function Home({ mountains, error }) {
       </Head>
       <main>
         <section className="relative bg-cover bg-center h-screen top-0">
-          <video
-            className="absolute inset-0 w-full h-full object-cover"
-            src="/images/Gunung.mp4"
-            autoPlay
-            loop
-            muted
-          />
+          <div
+            className="absolute inset-0 w-full h-full bg-cover bg-center"
+            style={{ backgroundImage: "url('/images/hiking.jpg')" }}
+          ></div>
           <div className="absolute inset-0 bg-black opacity-50"></div>
           <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center">
             <h1 className="text-4xl md:text-6xl font-bold mb-4">
@@ -104,8 +104,14 @@ export default function Home({ mountains, error }) {
               {searchTerm && filteredMountains.length > 0 && (
                 <ul className="absolute left-0 right-0 bg-white shadow-lg rounded-lg mt-1 max-h-60 overflow-auto z-10">
                   {filteredMountains.map((mountain) => (
-                    <li key={mountain.id} className="p-2 cursor-pointer hover:bg-gray-200">
-                      <a href={`/mountains/${mountain.id}`} className="text-gray-800 block">
+                    <li
+                      key={mountain.id}
+                      className="p-2 cursor-pointer hover:bg-gray-200"
+                    >
+                      <a
+                        href={`/mountains/${mountain.id}`}
+                        className="text-gray-800 block"
+                      >
                         {mountain.name}
                       </a>
                     </li>
@@ -118,10 +124,14 @@ export default function Home({ mountains, error }) {
         <section className="py-8 bg-light">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <h2 className="text-2xl font-bold mb-4">
-              All mountain routes at <span className="text-green-600">Indonesia</span>
+              All mountain routes at{" "}
+              <span className="text-green-600">Indonesia</span>
             </h2>
             <div className="mb-4">
-              <label htmlFor="province" className="block text-lg font-medium text-gray-700">
+              <label
+                htmlFor="province"
+                className="block text-lg font-medium text-gray-700"
+              >
                 Select Province:
               </label>
               <select
@@ -149,22 +159,28 @@ export default function Home({ mountains, error }) {
                 </button>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 flex-grow mx-4">
-                {isClient && (!error ? (
-                  getCurrentMountains().slice(currentIndex, currentIndex + 4).map((mountain) => (
-                    <Card
-                      key={mountain.id}
-                      image={`http://localhost:8055/assets/${mountain.image}`}
-                      name={mountain.name}
-                      location={mountain.location}
-                      link={`/mountains/${mountain.id}`}
-                      distance={`${mountain.distance} km`}
-                      difficulty={mountain.difficulty}
-                      rating={mountain.rating}
-                    />
-                  ))
-                ) : (
-                  <p className="text-center col-span-4">Data gunung tidak tersedia saat ini. Silakan coba lagi nanti.</p>
-                ))}
+                {isClient &&
+                  (!error ? (
+                    getCurrentMountains()
+                      .slice(currentIndex, currentIndex + 4)
+                      .map((mountain) => (
+                        <Card
+                          key={mountain.id}
+                          image={`http://localhost:8055/assets/${mountain.image}`}
+                          name={mountain.name}
+                          location={mountain.location}
+                          link={`/mountains/${mountain.id}`}
+                          distance={`${mountain.distance} km`}
+                          difficulty={mountain.difficulty}
+                          rating={mountain.rating}
+                        />
+                      ))
+                  ) : (
+                    <p className="text-center col-span-4">
+                      Data gunung tidak tersedia saat ini. Silakan coba lagi
+                      nanti.
+                    </p>
+                  ))}
               </div>
               {isClient && currentIndex + 4 < getCurrentMountains().length && (
                 <button
@@ -186,17 +202,17 @@ export default function Home({ mountains, error }) {
 
 export async function getStaticProps() {
   try {
-    const res = await fetch('http://127.0.0.1:8055/items/mountains');  // Mengambil data gunung dari Directus
+    const res = await fetch("http://127.0.0.1:8055/items/mountains"); // Mengambil data gunung dari Directus
     if (!res.ok) {
       throw new Error("API response error");
     }
-    const jsonData = await res.json();  // Mengubah respons menjadi format JSON
+    const jsonData = await res.json(); // Mengubah respons menjadi format JSON
 
-    const mountains = jsonData.data;  // Menyimpan data gunung dari respons
+    const mountains = jsonData.data; // Menyimpan data gunung dari respons
 
     return {
       props: {
-        mountains,  // Mengirim data gunung sebagai properti ke komponen
+        mountains, // Mengirim data gunung sebagai properti ke komponen
       },
       revalidate: 10, // Mere-generasi halaman setidaknya sekali setiap 10 detik
     };
@@ -205,8 +221,8 @@ export async function getStaticProps() {
 
     return {
       props: {
-        mountains: [],  // Mengirim daftar gunung kosong sebagai properti
-        error: "Unable to fetch mountains data",  // Mengirim pesan kesalahan sebagai properti
+        mountains: [], // Mengirim daftar gunung kosong sebagai properti
+        error: "Unable to fetch mountains data", // Mengirim pesan kesalahan sebagai properti
       },
       revalidate: 10, // Mere-generasi halaman setidaknya sekali setiap 10 detik
     };
