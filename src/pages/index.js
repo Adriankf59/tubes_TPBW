@@ -83,7 +83,7 @@ export default function Home({ mountains, error }) {
         <section className="relative bg-cover bg-center h-screen top-0">
           <video
             className="absolute inset-0 w-full h-full object-cover"
-            src="/images/gunung.mov"
+            src="/images/gunung.mp4"
             autoPlay
             loop
             muted
