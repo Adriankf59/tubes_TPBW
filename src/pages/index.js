@@ -202,7 +202,7 @@ export default function Home({ mountains, error }) {
 
 export async function getStaticProps() {
   try {
-    const res = await fetch("http://127.0.0.1:8055/items/mountains"); // Mengambil data gunung dari Directus
+    const res = await fetch("https://directus-394340675569.us-central1.run.app/items/mountains"); // Mengambil data gunung dari Directus
     if (!res.ok) {
       throw new Error("API response error");
     }
