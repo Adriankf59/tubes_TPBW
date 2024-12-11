@@ -369,7 +369,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
               </div>
               <div className="relative mb-6">
                 <img
-                  src={`http://localhost:8055/assets/${mountain.image}`}
+                  src={`https://directus-394340675569.us-central1.run.app/assets/${mountain.image}`}
                   alt={mountain.name}
                   className="w-full h-96 object-cover rounded-lg transition-transform duration-300"
                 />
@@ -423,7 +423,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
 
 export async function getStaticPaths() {
   try {
-    const res = await fetch('http://127.0.0.1:8055/items/mountains');
+    const res = await fetch('https://directus-394340675569.us-central1.run.app/items/mountains');
     if (!res.ok) throw new Error('Failed to fetch mountain data');
     const jsonData = await res.json();
     const mountains = jsonData.data;
@@ -452,7 +452,7 @@ export async function getStaticProps({ params }) {
   let centerCoordinates = [107.601529, -6.917464]; // Default coordinates of Indonesia
 
   try {
-    const mountainRes = await fetch(`http://127.0.0.1:8055/items/mountains/${params.id}`);
+    const mountainRes = await fetch(`https://directus-394340675569.us-central1.run.app/items/mountains/${params.id}`);
     if (!mountainRes.ok) throw new Error('Failed to fetch mountain data');
     const mountainData = await mountainRes.json();
     mountain = mountainData.data;
@@ -460,13 +460,13 @@ export async function getStaticProps({ params }) {
     const pointKey = mountain.point || 'default';
     const trackKey = mountain.track || 'default';
 
-    const resPoints = await fetch(`http://127.0.0.1:8055/items/${pointKey}`);
+    const resPoints = await fetch(`https://directus-394340675569.us-central1.run.app/items/${pointKey}`);
     if (resPoints.ok) {
       const pointsData = await resPoints.json();
       directusPoints = pointsData.data || [];
     }
 
-    const resLines = await fetch(`http://127.0.0.1:8055/items/${trackKey}`);
+    const resLines = await fetch(`https://directus-394340675569.us-central1.run.app/items/${trackKey}`);
     if (resLines.ok) {
       const linesData = await resLines.json();
       directusLines = linesData.data || [];
