@@ -166,7 +166,7 @@ export default function Home({ mountains, error }) {
                       .map((mountain) => (
                         <Card
                           key={mountain.id}
-                          image={`http://localhost:8055/assets/${mountain.image}`}
+                          image={`https://directus-394340675569.us-central1.run.app/assets/${mountain.image}`}
                           name={mountain.name}
                           location={mountain.location}
                           link={`/mountains/${mountain.id}`}
