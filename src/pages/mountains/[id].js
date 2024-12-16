@@ -78,8 +78,8 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
             type: 'Feature',
             geometry: point.geom,
             properties: {
-              name: point.name,
-              description: point.description
+              name: point.name || "No Name",
+              description: point.description || "No Description"
             }
           }))
         }
@@ -108,8 +108,8 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
             type: 'Feature',
             geometry: line.geom,
             properties: {
-              name: line.name,
-              description: line.description
+              name: line.name || "No Name",
+              description: line.description || "No Description"
             }
           }))
         }
@@ -145,29 +145,14 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     });
 
     // Add built-in zoom and rotation controls to the map.
-    newMap.addControl(
-      new maplibregl.NavigationControl({
-        visualizePitch: true,
-        showZoom: true,
-        showCompass: true
-      }),
-      'top-right'
-    );
+    newMap.addControl(new maplibregl.NavigationControl(), 'top-right');
 
     // Add the map scale control.
-    newMap.addControl(
-      new maplibregl.ScaleControl({
-        maxWidth: 80,
-        unit: 'metric'
-      }),
-      'bottom-left'
-    );
+    newMap.addControl(new maplibregl.ScaleControl({ maxWidth: 80, unit: 'metric' }), 'bottom-left');
 
     // Add geolocate control to the map.
     const geolocate = new maplibregl.GeolocateControl({
-      positionOptions: {
-        enableHighAccuracy: true,
-      },
+      positionOptions: { enableHighAccuracy: true },
       trackUserLocation: true,
       showUserHeading: true,
     });
@@ -202,7 +187,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     setMap(newMap);
 
     return () => newMap && newMap.remove();
-  }, [centerCoordinates]);
+  }, [centerCoordinates, mapStyle, is3D]);
 
   const toggleStyleBox = () => {
     setShowStyleBox(!showStyleBox);
@@ -211,7 +196,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
   return (
     <>
       <Head>
-        <title>Hiking Route - {mountain.name ?? "Data Not Available"}</title>
+        <title>Hiking Route - {mountain?.name ?? "Data Not Available"}</title>
         <style>{`
           .map-container {
             height: 550px;  // Set the height of the map
@@ -328,11 +313,11 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
               <a className="text-green-600 hover:underline">Back to Explore</a>
             </Link>
             <p className="text-sm text-gray-600">
-              {mountain.location ?? "Location Not Available"}
+              {mountain?.location ?? "Location Not Available"}
             </p>
           </div>
           <h1 className="text-4xl font-bold text-green-800 mb-2">
-            {mountain.name ?? "Mountain Name Not Available"}
+            {mountain?.name ?? "Mountain Name Not Available"}
           </h1>
           {mountain ? (
             <>
@@ -370,7 +355,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
               <div className="relative mb-6">
                 <img
                   src={`https://directus-394340675569.us-central1.run.app/assets/${mountain.image}`}
-                  alt={mountain.name}
+                  alt={mountain.name ?? "Image Not Available"}
                   className="w-full h-96 object-cover rounded-lg transition-transform duration-300"
                 />
               </div>

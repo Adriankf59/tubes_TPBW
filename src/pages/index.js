@@ -1,5 +1,6 @@
 import Head from "next/head"; // Mengimpor komponen Head untuk mengelola tag <head> di halaman
 import { useState, useEffect } from "react"; // Mengimpor hooks useState dan useEffect dari React
+import Image from "next/image"; // Mengimpor komponen Image dari Next.js untuk optimasi gambar
 import Card from "../../components/card"; // Mengimpor komponen Card
 import Footer from "../../components/footer"; // Mengimpor komponen Footer
 
@@ -11,12 +12,10 @@ export default function Home({ mountains, error }) {
   const [filteredMountains, setFilteredMountains] = useState([]); // State untuk menyimpan daftar gunung yang difilter
   const [selectedProvince, setSelectedProvince] = useState("All"); // State untuk menyimpan provinsi yang dipilih
 
-  // useEffect dijalankan setelah komponen dirender di sisi klien
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  // Fungsi untuk mengatur indeks ke tampilan berikutnya
   const handleNext = () => {
     const nextIndex = currentIndex + 4;
     if (nextIndex < getCurrentMountains().length) {
@@ -24,7 +23,6 @@ export default function Home({ mountains, error }) {
     }
   };
 
-  // Fungsi untuk mengatur indeks ke tampilan sebelumnya
   const handlePrev = () => {
     const prevIndex = currentIndex - 4;
     if (prevIndex >= 0) {
@@ -32,7 +30,6 @@ export default function Home({ mountains, error }) {
     }
   };
 
-  // Fungsi untuk menangani perubahan pada input pencarian
   const handleSearchChange = (e) => {
     const value = e.target.value.toLowerCase();
     setSearchTerm(value);
@@ -46,13 +43,11 @@ export default function Home({ mountains, error }) {
     }
   };
 
-  // Fungsi untuk menangani perubahan pemilihan provinsi
   const handleProvinceChange = (e) => {
     setSelectedProvince(e.target.value);
     setCurrentIndex(0); // Reset indeks ketika provinsi berubah
   };
 
-  // Fungsi untuk mendapatkan daftar gunung saat ini berdasarkan filter
   const getCurrentMountains = () => {
     let currentMountains = mountains;
 
@@ -71,7 +66,6 @@ export default function Home({ mountains, error }) {
     return currentMountains;
   };
 
-  // Mendapatkan daftar provinsi unik, mengurutkannya berdasarkan abjad, dan menambahkan "All" di atas
   const uniqueProvinces = [
     "All",
     ...[...new Set(mountains.map((mountain) => mountain.provinsi))].sort(),
