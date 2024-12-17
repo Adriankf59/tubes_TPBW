@@ -5,12 +5,11 @@ import Card from "../../components/card"; // Mengimpor komponen Card
 import Footer from "../../components/footer"; // Mengimpor komponen Footer
 
 export default function Home({ mountains, error }) {
-  // Deklarasi state menggunakan useState hook
-  const [currentIndex, setCurrentIndex] = useState(0); // State untuk menyimpan indeks saat ini dari tampilan data
-  const [isClient, setIsClient] = useState(false); // State untuk menentukan apakah komponen dijalankan di sisi klien
-  const [searchTerm, setSearchTerm] = useState(""); // State untuk menyimpan istilah pencarian
-  const [filteredMountains, setFilteredMountains] = useState([]); // State untuk menyimpan daftar gunung yang difilter
-  const [selectedProvince, setSelectedProvince] = useState("All"); // State untuk menyimpan provinsi yang dipilih
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isClient, setIsClient] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredMountains, setFilteredMountains] = useState([]);
+  const [selectedProvince, setSelectedProvince] = useState("All");
 
   useEffect(() => {
     setIsClient(true);
@@ -45,7 +44,7 @@ export default function Home({ mountains, error }) {
 
   const handleProvinceChange = (e) => {
     setSelectedProvince(e.target.value);
-    setCurrentIndex(0); // Reset indeks ketika provinsi berubah
+    setCurrentIndex(0);
   };
 
   const getCurrentMountains = () => {
@@ -160,11 +159,16 @@ export default function Home({ mountains, error }) {
                       .map((mountain) => (
                         <Card
                           key={mountain.id}
-                          image={`https://directus-394340675569.us-central1.run.app/assets/${mountain.image}`}
+                          image={
+                            mountain.image
+                              ? `https://directus-394340675569.us-central1.run.app/assets/${mountain.image}`
+                              : "/images/placeholder.jpg" // Tambahkan gambar default jika tidak ada gambar
+                          }
                           name={mountain.name}
-                          location={mountain.location}
+                          kota={mountain.kota}
+                          provinsi={mountain.provinsi}
                           link={`/mountains/${mountain.id}`}
-                          distance={`${mountain.distance} km`}
+                          elevation={`${mountain.elevation} `}
                           difficulty={mountain.difficulty}
                           rating={mountain.rating}
                         />
@@ -196,29 +200,29 @@ export default function Home({ mountains, error }) {
 
 export async function getStaticProps() {
   try {
-    const res = await fetch("https://directus-394340675569.us-central1.run.app/items/mountains"); // Mengambil data gunung dari Directus
+    const res = await fetch("https://directus-394340675569.us-central1.run.app/items/mountains");
     if (!res.ok) {
       throw new Error("API response error");
     }
-    const jsonData = await res.json(); // Mengubah respons menjadi format JSON
+    const jsonData = await res.json();
 
-    const mountains = jsonData.data; // Menyimpan data gunung dari respons
+    const mountains = jsonData.data;
 
     return {
       props: {
-        mountains, // Mengirim data gunung sebagai properti ke komponen
+        mountains,
       },
-      revalidate: 10, // Mere-generasi halaman setidaknya sekali setiap 10 detik
+      revalidate: 10,
     };
   } catch (error) {
     console.error("Failed to fetch mountains data:", error);
 
     return {
       props: {
-        mountains: [], // Mengirim daftar gunung kosong sebagai properti
-        error: "Unable to fetch mountains data", // Mengirim pesan kesalahan sebagai properti
+        mountains: [],
+        error: "Unable to fetch mountains data",
       },
-      revalidate: 10, // Mere-generasi halaman setidaknya sekali setiap 10 detik
+      revalidate: 10,
     };
   }
 }
