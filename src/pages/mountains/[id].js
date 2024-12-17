@@ -313,7 +313,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
               <a className="text-green-600 hover:underline">Back to Explore</a>
             </Link>
             <p className="text-sm text-gray-600">
-              {mountain?.location ?? "Location Not Available"}
+              {mountain?.provinsi ?? "Location Not Available"}
             </p>
           </div>
           <h1 className="text-4xl font-bold text-green-800 mb-2">
@@ -343,12 +343,6 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                       {mountain.estimated_time}
                     </span>
                     <span className="text-sm text-gray-500">Estimated time</span>
-                  </div>
-                  <div className="text-center">
-                    <span className="block text-lg font-bold text-black">
-                      {mountain.type}
-                    </span>
-                    <span className="text-sm text-gray-500">Type</span>
                   </div>
                 </div>
               </div>
