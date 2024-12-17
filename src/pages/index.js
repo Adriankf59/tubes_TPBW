@@ -1,8 +1,7 @@
-import Head from "next/head"; // Mengimpor komponen Head untuk mengelola tag <head> di halaman
-import { useState, useEffect } from "react"; // Mengimpor hooks useState dan useEffect dari React
-import Image from "next/image"; // Mengimpor komponen Image dari Next.js untuk optimasi gambar
-import Card from "../../components/card"; // Mengimpor komponen Card
-import Footer from "../../components/footer"; // Mengimpor komponen Footer
+import Head from "next/head"; 
+import { useState, useEffect } from "react"; 
+import Card from "../../components/card"; 
+import Footer from "../../components/footer"; 
 
 export default function Home({ mountains, error }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -65,6 +64,16 @@ export default function Home({ mountains, error }) {
     return currentMountains;
   };
 
+  const provinceCounts = mountains.reduce((acc, mountain) => {
+    const province = mountain.provinsi;
+    if (!acc[province]) {
+      acc[province] = 0;
+    }
+    acc[province] += 1;
+    return acc;
+  }, {});
+
+  // Menambahkan opsi "All" yang mencakup semua gunung
   const uniqueProvinces = [
     "All",
     ...[...new Set(mountains.map((mountain) => mountain.provinsi))].sort(),
@@ -136,7 +145,7 @@ export default function Home({ mountains, error }) {
               >
                 {uniqueProvinces.map((province) => (
                   <option key={province} value={province}>
-                    {province}
+                    {province} ({province === "All" ? mountains.length : provinceCounts[province]} mountains)
                   </option>
                 ))}
               </select>
@@ -162,7 +171,7 @@ export default function Home({ mountains, error }) {
                           image={
                             mountain.image
                               ? `https://directus-394340675569.us-central1.run.app/assets/${mountain.image}`
-                              : "/images/placeholder.jpg" // Tambahkan gambar default jika tidak ada gambar
+                              : "/images/placeholder.jpg"
                           }
                           name={mountain.name}
                           kota={mountain.kota}
