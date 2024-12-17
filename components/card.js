@@ -20,7 +20,7 @@ const Card = ({ image, name, kota, provinsi, link, elevation }) => {
           <div className="p-4 flex-grow flex flex-col">
             <h3 className="text-lg font-semibold text-black">{name}</h3>
             <p className="mt-2 text-gray-600 truncate">{kota}, {provinsi}</p>
-            <p className="mt-4 text-sm text-gray-600">Elevation : {elevation} m</p>
+            <p className="mt-4 text-sm text-gray-600">Elevation : {elevation} mdpl</p>
           </div>
         </div>
       </div>
