@@ -78,8 +78,8 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
             type: 'Feature',
             geometry: point.geom,
             properties: {
-              name: point.name || "No Name",
-              description: point.description || "No Description"
+              name: point.name,
+              description: point.description
             }
           }))
         }
@@ -108,8 +108,8 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
             type: 'Feature',
             geometry: line.geom,
             properties: {
-              name: line.name || "No Name",
-              description: line.description || "No Description"
+              name: line.name,
+              description: line.description
             }
           }))
         }
@@ -145,14 +145,29 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     });
 
     // Add built-in zoom and rotation controls to the map.
-    newMap.addControl(new maplibregl.NavigationControl(), 'top-right');
+    newMap.addControl(
+      new maplibregl.NavigationControl({
+        visualizePitch: true,
+        showZoom: true,
+        showCompass: true
+      }),
+      'top-right'
+    );
 
     // Add the map scale control.
-    newMap.addControl(new maplibregl.ScaleControl({ maxWidth: 80, unit: 'metric' }), 'bottom-left');
+    newMap.addControl(
+      new maplibregl.ScaleControl({
+        maxWidth: 80,
+        unit: 'metric'
+      }),
+      'bottom-left'
+    );
 
     // Add geolocate control to the map.
     const geolocate = new maplibregl.GeolocateControl({
-      positionOptions: { enableHighAccuracy: true },
+      positionOptions: {
+        enableHighAccuracy: true,
+      },
       trackUserLocation: true,
       showUserHeading: true,
     });
@@ -187,7 +202,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     setMap(newMap);
 
     return () => newMap && newMap.remove();
-  }, [centerCoordinates, mapStyle, is3D]);
+  }, [centerCoordinates]);
 
   const toggleStyleBox = () => {
     setShowStyleBox(!showStyleBox);
@@ -196,7 +211,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
   return (
     <>
       <Head>
-        <title>Hiking Route - {mountain?.name ?? "Data Not Available"}</title>
+        <title>Hiking Route - {mountain.name}</title>
         <style>{`
           .map-container {
             height: 550px;  // Set the height of the map
@@ -313,54 +328,54 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
               <a className="text-green-600 hover:underline">Back to Explore</a>
             </Link>
             <p className="text-sm text-gray-600">
-              {mountain?.provinsi ?? "Location Not Available"}
+              {mountain.location}
             </p>
           </div>
           <h1 className="text-4xl font-bold text-green-800 mb-2">
-            {mountain?.name ?? "Mountain Name Not Available"}
+            {mountain.name}
           </h1>
-          {mountain ? (
-            <>
-              <div className="flex items-center space-x-4 mb-6">
-                <div className="flex items-center">
-                  <span className="text-black font-semibold">{mountain.rating}</span>
-                  <span className="mx-2 text-gray-400">·</span>
-                  <span className="text-gray-600">{mountain.difficulty}</span>
-                </div>
-                <div className="flex space-x-6">
-                  <div className="text-center">
-                    <span className="block text-lg font-bold text-black">{mountain.distance} km</span>
-                    <span className="text-sm text-gray-500">Distance</span>
-                  </div>
-                  <div className="text-center">
-                    <span className="block text-lg font-bold text-black">
-                      {mountain.elevation_gain} m
-                    </span>
-                    <span className="text-sm text-gray-500">Elevation gain</span>
-                  </div>
-                  <div className="text-center">
-                    <span className="block text-lg font-bold text-black">
-                      {mountain.estimated_time}
-                    </span>
-                    <span className="text-sm text-gray-500">Estimated time</span>
-                  </div>
-                </div>
+          <div className="flex items-center space-x-4 mb-6">
+            <div className="flex items-center">
+              <span className="text-black font-semibold">{mountain.rating}</span>
+              <span className="mx-2 text-gray-400">·</span>
+              <span className="text-gray-600">{mountain.difficulty}</span>
+            </div>
+            <div className="flex space-x-6">
+              <div className="text-center">
+                <span className="block text-lg font-bold text-black">{mountain.distance} km</span>
+                <span className="text-sm text-gray-500">Distance</span>
               </div>
-              <div className="relative mb-6">
-                <img
-                  src={`https://directus-394340675569.us-central1.run.app/assets/${mountain.image}`}
-                  alt={mountain.name ?? "Image Not Available"}
-                  className="w-full h-96 object-cover rounded-lg transition-transform duration-300"
-                />
+              <div className="text-center">
+                <span className="block text-lg font-bold text-black">
+                  {mountain.elevation_gain} m
+                </span>
+                <span className="text-sm text-gray-500">Elevation gain</span>
               </div>
-            </>
-          ) : (
-            <p className="text-red-600">Mountain data is not available at the moment. Please try again later.</p>
-          )}
+              <div className="text-center">
+                <span className="block text-lg font-bold text-black">
+                  {mountain.estimated_time}
+                </span>
+                <span className="text-sm text-gray-500">Estimated time</span>
+              </div>
+              <div className="text-center">
+                <span className="block text-lg font-bold text-black">
+                  {mountain.type}
+                </span>
+                <span className="text-sm text-gray-500">Type</span>
+              </div>
+            </div>
+          </div>
+          <div className="relative mb-6">
+            <img
+              src={`https://directus-394340675569.us-central1.run.app/assets/${mountain.image}`}
+              alt={mountain.name}
+              className="w-full h-96 object-cover rounded-lg transition-transform duration-300"
+            />
+          </div>
         </section>
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <h2 className="text-xl font-bold text-green-800 mb-4">Overview</h2>
-          <div className="text-gray-700 mb-4" dangerouslySetInnerHTML={{ __html: mountain ? mountain.penjelasan : "Overview not available" }}></div>
+          <div className="text-gray-700 mb-4" dangerouslySetInnerHTML={{ __html: mountain.penjelasan }}></div>
           <h2 className="text-xl font-bold text-green-800 mb-4">Peta Jalur Pendakian</h2>
           <div className="map-container mb-6">
             <div className="action-buttons">
@@ -401,65 +416,43 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
 }
 
 export async function getStaticPaths() {
-  try {
-    const res = await fetch('https://directus-394340675569.us-central1.run.app/items/mountains');
-    if (!res.ok) throw new Error('Failed to fetch mountain data');
-    const jsonData = await res.json();
-    const mountains = jsonData.data;
+  const res = await fetch('https://directus-394340675569.us-central1.run.app/items/mountains');
+  const jsonData = await res.json();
+  const mountains = jsonData.data;
 
-    const paths = mountains.map((mountain) => ({
-      params: { id: mountain.id.toString() },
-    }));
+  const paths = mountains.map((mountain) => ({
+    params: { id: mountain.id.toString() },
+  }));
 
-    return {
-      paths,
-      fallback: 'blocking',
-    };
-  } catch (error) {
-    console.error("Error fetching mountain paths:", error);
-    return {
-      paths: [],
-      fallback: 'blocking',
-    };
-  }
+  return {
+    paths,
+    fallback: 'blocking',
+  };
 }
 
 export async function getStaticProps({ params }) {
-  let mountain = null;
-  let directusPoints = [];
-  let directusLines = [];
+  const mountainRes = await fetch(`https://directus-394340675569.us-central1.run.app/items/mountains/${params.id}`);
+  const mountainData = await mountainRes.json();
+  const mountain = mountainData.data;
+
+  const pointKey = mountain.point || 'default';
+  const trackKey = mountain.track || 'default';
+
+  const resPoints = await fetch(`https://directus-394340675569.us-central1.run.app/items/${pointKey}`);
+  const pointsData = await resPoints.json();
+  const directusPoints = pointsData.data || [];
+
+  const resLines = await fetch(`https://directus-394340675569.us-central1.run.app/items/${trackKey}`);
+  const linesData = await resLines.json();
+  const directusLines = linesData.data || [];
+
   let centerCoordinates = [107.601529, -6.917464]; // Default coordinates of Indonesia
 
-  try {
-    const mountainRes = await fetch(`https://directus-394340675569.us-central1.run.app/items/mountains/${params.id}`);
-    if (!mountainRes.ok) throw new Error('Failed to fetch mountain data');
-    const mountainData = await mountainRes.json();
-    mountain = mountainData.data;
-
-    const pointKey = mountain.point || 'default';
-    const trackKey = mountain.track || 'default';
-
-    const resPoints = await fetch(`https://directus-394340675569.us-central1.run.app/items/${pointKey}`);
-    if (resPoints.ok) {
-      const pointsData = await resPoints.json();
-      directusPoints = pointsData.data || [];
+  if (directusPoints.length > 0) {
+    const pointIdOne = directusPoints.find(point => point.id === 1); 
+    if (pointIdOne && pointIdOne.geom) {
+      centerCoordinates = pointIdOne.geom.coordinates;
     }
-
-    const resLines = await fetch(`https://directus-394340675569.us-central1.run.app/items/${trackKey}`);
-    if (resLines.ok) {
-      const linesData = await resLines.json();
-      directusLines = linesData.data || [];
-    }
-
-    if (directusPoints.length > 0) {
-      const pointIdOne = directusPoints.find(point => point.id === 1);
-      if (pointIdOne && pointIdOne.geom) {
-        centerCoordinates = pointIdOne.geom.coordinates;
-      }
-    }
-
-  } catch (error) {
-    console.error("Error fetching data:", error);
   }
 
   return {
