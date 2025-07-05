@@ -1,6 +1,7 @@
 import Head from "next/head";
 import Link from "next/link";
-import { useEffect, useRef, useState } from 'react';
+import Image from "next/image";
+import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import Footer from "../../../components/footer";
@@ -12,6 +13,78 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
   const [mapStyle, setMapStyle] = useState('outdoor');
   const [showStyleBox, setShowStyleBox] = useState(false);
   const key = 'Bt7BC1waN22lhYojEJO1';
+
+  const addSourceAndLayers = useCallback((map) => {
+    // Add source for directus points
+    if (directusPoints.length && !map.getSource('directus-points')) {
+      map.addSource('directus-points', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: directusPoints.map((point) => ({
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [parseFloat(point.longitude), parseFloat(point.latitude)]
+            },
+            properties: {
+              name: point.name,
+              description: point.description || 'No description available'
+            }
+          }))
+        }
+      });
+
+      if (!map.getLayer('points-layer')) {
+        map.addLayer({
+          id: 'points-layer',
+          type: 'circle',
+          source: 'directus-points',
+          paint: {
+            'circle-radius': 6,
+            'circle-color': '#007bff'
+          }
+        });
+      }
+    }
+
+    // Add source for directus lines
+    if (directusLines.length && !map.getSource('directus-lines')) {
+      map.addSource('directus-lines', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: directusLines.map((line) => ({
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: line.coordinates
+            },
+            properties: {
+              name: line.name,
+              description: line.description || 'No description available'
+            }
+          }))
+        }
+      });
+
+      if (!map.getLayer('lines-layer')) {
+        map.addLayer({
+          id: 'lines-layer',
+          type: 'line',
+          source: 'directus-lines',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#03fc28',
+            'line-width': 4
+          }
+        });
+      }
+    }
+  }, [directusPoints, directusLines]);
 
   const toggle3D = () => {
     setIs3D(!is3D);
@@ -33,7 +106,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     }
   };
 
-  const changeMapStyle = (newStyle) => {
+  const changeMapStyle = useCallback((newStyle) => {
     if (map) {
       const currentCenter = map.getCenter();
       const currentZoom = map.getZoom();
@@ -65,73 +138,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     } else {
       setMapStyle(newStyle);
     }
-  };
-
-  const addSourceAndLayers = (map) => {
-    // Add source for directus points
-    if (directusPoints.length && !map.getSource('directus-points')) {
-      map.addSource('directus-points', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: directusPoints.map((point) => ({
-            type: 'Feature',
-            geometry: point.geom,
-            properties: {
-              name: point.name,
-              description: point.description
-            }
-          }))
-        }
-      });
-
-      if (!map.getLayer('points-layer')) {
-        map.addLayer({
-          id: 'points-layer',
-          type: 'circle',
-          source: 'directus-points',
-          paint: {
-            'circle-radius': 6,
-            'circle-color': '#007bff'
-          }
-        });
-      }
-    }
-
-    // Add source for directus lines
-    if (directusLines.length && !map.getSource('directus-lines')) {
-      map.addSource('directus-lines', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: directusLines.map((line) => ({
-            type: 'Feature',
-            geometry: line.geom,
-            properties: {
-              name: line.name,
-              description: line.description
-            }
-          }))
-        }
-      });
-
-      if (!map.getLayer('lines-layer')) {
-        map.addLayer({
-          id: 'lines-layer',
-          type: 'line',
-          source: 'directus-lines',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#03fc28',
-            'line-width': 4
-          }
-        });
-      }
-    }
-  };
+  }, [map, is3D, addSourceAndLayers, key]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !mapContainerRef.current) return;
@@ -202,7 +209,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     setMap(newMap);
 
     return () => newMap && newMap.remove();
-  }, [centerCoordinates]);
+  }, [centerCoordinates, mapStyle, addSourceAndLayers, key]);
 
   const toggleStyleBox = () => {
     setShowStyleBox(!showStyleBox);
@@ -313,7 +320,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
             border-radius: 4px;
           }
 
-          .style-thumbnails img {
+          .style-thumbnails .next-image {
             width: 40px;
             height: 40px;
             border-radius: 4px;
@@ -336,41 +343,49 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
           </h1>
           <div className="flex items-center space-x-4 mb-6">
             <div className="flex items-center">
-              <span className="text-black font-semibold">{mountain.rating}</span>
+              <span className="text-black font-semibold">{mountain.rating || 'N/A'}</span>
               <span className="mx-2 text-gray-400">·</span>
-              <span className="text-gray-600">{mountain.difficulty}</span>
+              <span className="text-gray-600">{mountain.difficulty || 'Unknown'}</span>
             </div>
             <div className="flex space-x-6">
               <div className="text-center">
-                <span className="block text-lg font-bold text-black">{mountain.distance} km</span>
+                <span className="block text-lg font-bold text-black">{mountain.distance || 'N/A'}</span>
                 <span className="text-sm text-gray-500">Distance</span>
               </div>
               <div className="text-center">
                 <span className="block text-lg font-bold text-black">
-                  {mountain.elevation_gain} m
+                  {mountain.elevation || mountain.elevation_gain || 'N/A'} m
                 </span>
-                <span className="text-sm text-gray-500">Elevation gain</span>
+                <span className="text-sm text-gray-500">Elevation</span>
               </div>
               <div className="text-center">
                 <span className="block text-lg font-bold text-black">
-                  {mountain.estimated_time}
+                  {mountain.estimated_time || 'N/A'}
                 </span>
                 <span className="text-sm text-gray-500">Estimated time</span>
               </div>
               <div className="text-center">
                 <span className="block text-lg font-bold text-black">
-                  {mountain.type}
+                  {mountain.type || 'Hiking'}
                 </span>
               </div>
             </div>
           </div>
-          <div className="relative mb-6">
-            <img
-              src={`https://directus-394340675569.us-central1.run.app/assets/${mountain.image}`}
-              alt={mountain.name}
-              className="w-full h-96 object-cover rounded-lg transition-transform duration-300"
-            />
-          </div>
+          {mountain.image && (
+            <div className="relative mb-6">
+              <Image
+                src={`https://adrianfirmansyah-website.my.id/trailview/assets/${mountain.image}`}
+                alt={mountain.name}
+                width={1200}
+                height={400}
+                className="w-full h-96 object-cover rounded-lg transition-transform duration-300"
+                priority
+                placeholder="blur"
+                blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="
+                sizes="(max-width: 768px) 100vw, 1200px"
+              />
+            </div>
+          )}
         </section>
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <h2 className="text-xl font-bold text-green-800 mb-4">Overview</h2>
@@ -383,7 +398,13 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
               </button>
             </div>
             <div className="map-style-icon" onClick={toggleStyleBox}>
-              <img src="/images/icons8-map-80.png" alt="Map Style Icon" width="40" height="40" />
+              <Image 
+                src="/images/icons8-map-80.png" 
+                alt="Map Style Icon" 
+                width={40} 
+                height={40}
+                className="cursor-pointer"
+              />
             </div>
             <div className="style-box">
               <div className="style-box-header">
@@ -392,15 +413,33 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
               </div>
               <div className="style-thumbnails">
                 <div className={mapStyle === 'outdoor' ? 'selected-style' : ''} onClick={() => changeMapStyle('outdoor')}>
-                  <img src="/images/outdoor.jpg" alt="Outdoor" />
+                  <Image 
+                    src="/images/outdoor.jpg" 
+                    alt="Outdoor" 
+                    width={40}
+                    height={40}
+                    className="next-image"
+                  />
                   <span>Outdoor</span>
                 </div>
                 <div className={mapStyle === 'streets' ? 'selected-style' : ''} onClick={() => changeMapStyle('streets')}>
-                  <img src="/images/street.jpg" alt="Streets" />
+                  <Image 
+                    src="/images/street.jpg" 
+                    alt="Streets" 
+                    width={40}
+                    height={40}
+                    className="next-image"
+                  />
                   <span>Streets</span>
                 </div>
                 <div className={mapStyle === 'satellite' ? 'selected-style' : ''} onClick={() => changeMapStyle('satellite')}>
-                  <img src="/images/satellite.jpg" alt="Satellite" />
+                  <Image 
+                    src="/images/satellite.jpg" 
+                    alt="Satellite" 
+                    width={40}
+                    height={40}
+                    className="next-image"
+                  />
                   <span>Satellite</span>
                 </div>
               </div>
@@ -415,7 +454,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
 }
 
 export async function getStaticPaths() {
-  const res = await fetch('https://directus-394340675569.us-central1.run.app/items/mountains');
+  const res = await fetch('https://adrianfirmansyah-website.my.id/trailview/items/mountains');
   const jsonData = await res.json();
   const mountains = jsonData.data;
 
@@ -430,28 +469,41 @@ export async function getStaticPaths() {
 }
 
 export async function getStaticProps({ params }) {
-  const mountainRes = await fetch(`https://directus-394340675569.us-central1.run.app/items/mountains/${params.id}`);
+  const mountainRes = await fetch(`https://adrianfirmansyah-website.my.id/trailview/items/mountains/${params.id}`);
   const mountainData = await mountainRes.json();
   const mountain = mountainData.data;
 
-  const pointKey = mountain.point || 'default';
-  const trackKey = mountain.track || 'default';
+  const pointKey = mountain.point || 'point_burangrang';
+  const trackKey = mountain.track || 'jalur_burangrang';
 
-  const resPoints = await fetch(`https://directus-394340675569.us-central1.run.app/items/${pointKey}`);
+  // Fetch points data
+  const resPoints = await fetch(`https://adrianfirmansyah-website.my.id/trailview/items/${pointKey}`);
   const pointsData = await resPoints.json();
   const directusPoints = pointsData.data || [];
 
-  const resLines = await fetch(`https://directus-394340675569.us-central1.run.app/items/${trackKey}`);
+  // Fetch track/lines data
+  const resLines = await fetch(`https://adrianfirmansyah-website.my.id/trailview/items/${trackKey}`);
   const linesData = await resLines.json();
   const directusLines = linesData.data || [];
 
   let centerCoordinates = [107.601529, -6.917464]; // Default coordinates of Indonesia
 
+  // Calculate center coordinates from points data
   if (directusPoints.length > 0) {
-    const pointIdOne = directusPoints.find(point => point.id === 1); 
-    if (pointIdOne && pointIdOne.geom) {
-      centerCoordinates = pointIdOne.geom.coordinates;
+    // Use the first point or find a specific point (e.g., starting point)
+    const startPoint = directusPoints.find(point => 
+      point.name.toLowerCase().includes('start') || 
+      point.name.toLowerCase().includes('puncak') ||
+      point.id === 1
+    ) || directusPoints[0];
+    
+    if (startPoint && startPoint.latitude && startPoint.longitude) {
+      centerCoordinates = [parseFloat(startPoint.longitude), parseFloat(startPoint.latitude)];
     }
+  } else if (directusLines.length > 0 && directusLines[0].coordinates && directusLines[0].coordinates.length > 0) {
+    // If no points, use the first coordinate from the track
+    const firstCoord = directusLines[0].coordinates[0];
+    centerCoordinates = [firstCoord[0], firstCoord[1]];
   }
 
   return {
