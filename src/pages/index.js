@@ -1,6 +1,6 @@
 import Head from "next/head";
 import Image from "next/image";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
 // SVG Icon Components
 const SearchIcon = () => (
@@ -85,56 +85,15 @@ const buildImageUrl = (imageId) => {
 // SVG placeholder as base64
 const svgPlaceholder = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMDAgMjAwTDE1MCA5MEwyMDAgMTYwTDI1MCA4MEwzMDAgMjAwSDEwMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPGV0bGlwc2UgY3g9IjMwMCIgY3k9IjkwIiByeD0iMjAiIHJ5PSIyMCIgZmlsbD0iI0ZCQkYyNCIvPgo8dGV4dCB4PSIyMDAiIHk9IjE4MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2QjcyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkd1bnVuZyBJbmRvbmVzaWE8L3RleHQ+Cjwvc3ZnPg==";
 
-// Trail Card Component with fixes
+// Trail Card Component with fixed React Hook warning
 const TrailCard = ({ mountain, index, availableMountains = [] }) => {
   const [isSaved, setIsSaved] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [imageSrc, setImageSrc] = useState('');
   const [isClient, setIsClient] = useState(false);
   
-  // Fix hydration by ensuring client-side only rendering for dynamic content
-  useEffect(() => {
-    setIsClient(true);
-    const timer = setTimeout(() => {
-      setIsVisible(true);
-    }, index * 100);
-    
-    return () => clearTimeout(timer);
-  }, [index]);
-  
-  useEffect(() => {
-    if (isClient) {
-      // Set initial image source only on client side
-      if (mountain?.image) {
-        // Try direct URL first
-        setImageSrc(buildDirectImageUrl(mountain.image));
-      } else {
-        setImageSrc(getFallbackImageUrl());
-      }
-    }
-  }, [mountain, availableMountains, isClient]);
-  
-  const getDifficultyColor = (difficulty) => {
-    switch (difficulty?.toLowerCase()) {
-      case 'easy': return 'bg-green-100 text-green-800';
-      case 'moderate': 
-      case 'medium': return 'bg-yellow-100 text-yellow-800';
-      case 'hard': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-  
-  const getDifficultyText = (difficulty) => {
-    switch (difficulty?.toLowerCase()) {
-      case 'easy': return 'Mudah';
-      case 'moderate': 
-      case 'medium': return 'Sedang';
-      case 'hard': return 'Sulit';
-      default: return difficulty || 'Tidak diketahui';
-    }
-  };
-  
-  const getFallbackImageUrl = () => {
+  // Memoize fallback image URL calculation to prevent unnecessary recalculations
+  const fallbackImageUrl = useMemo(() => {
     if (!availableMountains || availableMountains.length === 0) {
       return svgPlaceholder;
     }
@@ -150,9 +109,36 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
     }
     
     return svgPlaceholder;
-  };
+  }, [availableMountains, mountain?.id]);
   
-  const handleImageError = () => {
+  // Memoize primary image URL - removed unnecessary dependency
+  const primaryImageUrl = useMemo(() => {
+    return mountain?.image ? buildDirectImageUrl(mountain.image) : null;
+  }, [mountain?.image]);
+  
+  // Memoize utility functions - moved before early returns
+  const getDifficultyColor = useCallback((difficulty) => {
+    switch (difficulty?.toLowerCase()) {
+      case 'easy': return 'bg-green-100 text-green-800';
+      case 'moderate': 
+      case 'medium': return 'bg-yellow-100 text-yellow-800';
+      case 'hard': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  }, []);
+  
+  const getDifficultyText = useCallback((difficulty) => {
+    switch (difficulty?.toLowerCase()) {
+      case 'easy': return 'Mudah';
+      case 'moderate': 
+      case 'medium': return 'Sedang';
+      case 'hard': return 'Sulit';
+      default: return difficulty || 'Tidak diketahui';
+    }
+  }, []);
+  
+  // Optimized image error handler - moved before early returns
+  const handleImageError = useCallback(() => {
     if (isClient) {
       console.error('Image failed to load:', imageSrc);
       
@@ -160,7 +146,7 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
       if (imageSrc && imageSrc.includes('adrianfirmansyah-website.my.id') && !imageSrc.includes('weserv.nl')) {
         // If direct URL failed, try proxy
         console.log('Direct URL failed, trying proxy...');
-        const proxyUrl = buildImageUrlViaProxy(mountain.image);
+        const proxyUrl = buildImageUrlViaProxy(mountain?.image);
         if (proxyUrl) {
           setImageSrc(proxyUrl);
           return;
@@ -168,11 +154,48 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
       }
       
       // If everything failed, use fallback
-      setImageSrc(getFallbackImageUrl());
+      setImageSrc(fallbackImageUrl);
     }
-  };
+  }, [isClient, imageSrc, mountain?.image, fallbackImageUrl]);
   
-  // Don't render until client-side
+  // Handle card click navigation - moved before early returns
+  const handleCardClick = useCallback((e) => {
+    // Don't navigate if clicking the bookmark button
+    if (e.target.closest('button')) {
+      return;
+    }
+    
+    // Navigate to mountain detail page
+    if (mountain?.id) {
+      window.location.href = `/mountains/${mountain.id}`;
+    }
+  }, [mountain?.id]);
+  
+  // Handle bookmark toggle - moved before early returns
+  const handleBookmarkToggle = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsSaved(!isSaved);
+  }, [isSaved]);
+  
+  // Fix hydration by ensuring client-side only rendering for dynamic content
+  useEffect(() => {
+    setIsClient(true);
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, index * 100);
+    
+    return () => clearTimeout(timer);
+  }, [index]);
+  
+  // Set image source when client is ready - FIXED: No more missing dependencies
+  useEffect(() => {
+    if (isClient) {
+      setImageSrc(primaryImageUrl || fallbackImageUrl);
+    }
+  }, [isClient, primaryImageUrl, fallbackImageUrl]);
+  
+  // Don't render until client-side to prevent hydration issues
   if (!isClient) {
     return (
       <div className="group relative bg-white rounded-xl overflow-hidden shadow-sm h-80 animate-pulse">
@@ -190,19 +213,6 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
   if (!mountain) {
     return null;
   }
-  
-  // Handle card click navigation
-  const handleCardClick = (e) => {
-    // Don't navigate if clicking the bookmark button
-    if (e.target.closest('button')) {
-      return;
-    }
-    
-    // Navigate to mountain detail page
-    if (mountain?.id) {
-      window.location.href = `/mountains/${mountain.id}`;
-    }
-  };
   
   return (
     <div 
@@ -237,11 +247,7 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsSaved(!isSaved);
-          }}
+          onClick={handleBookmarkToggle}
           className="absolute top-3 right-3 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-300 hover:scale-110"
           aria-label={`Simpan ${mountain.name || 'gunung ini'}`}
         >
@@ -316,19 +322,27 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
     };
   }, [isClient]);
   
-  // Ensure mountains is always an array
-  const safeMountains = Array.isArray(mountains) ? mountains : [];
-  const uniqueProvinces = ["All", ...new Set(safeMountains.map(m => m?.provinsi).filter(Boolean))].sort();
+  // Ensure mountains is always an array and memoize computations
+  const safeMountains = useMemo(() => {
+    return Array.isArray(mountains) ? mountains : [];
+  }, [mountains]);
   
-  const provinceCounts = safeMountains.reduce((acc, mountain) => {
-    const province = mountain?.provinsi;
-    if (province) {
-      acc[province] = (acc[province] || 0) + 1;
-    }
-    return acc;
-  }, {});
+  const uniqueProvinces = useMemo(() => {
+    return ["All", ...new Set(safeMountains.map(m => m?.provinsi).filter(Boolean))].sort();
+  }, [safeMountains]);
   
-  const handleSearchChange = (e) => {
+  const provinceCounts = useMemo(() => {
+    return safeMountains.reduce((acc, mountain) => {
+      const province = mountain?.provinsi;
+      if (province) {
+        acc[province] = (acc[province] || 0) + 1;
+      }
+      return acc;
+    }, {});
+  }, [safeMountains]);
+  
+  // Optimized search handler
+  const handleSearchChange = useCallback((e) => {
     const value = e.target.value;
     setSearchTerm(value);
     
@@ -344,9 +358,10 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
       setFilteredMountains([]);
       setShowDropdown(false);
     }
-  };
+  }, [safeMountains, isClient]);
   
-  const getCurrentMountains = () => {
+  // Memoize filtered mountains by province
+  const getCurrentMountains = useCallback(() => {
     let currentMountains = safeMountains;
     
     if (selectedProvince !== "All") {
@@ -354,7 +369,7 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
     }
     
     return currentMountains;
-  };
+  }, [safeMountains, selectedProvince]);
   
   const displayedMountains = getCurrentMountains();
   const totalPages = Math.ceil(displayedMountains.length / itemsPerPage);
@@ -362,6 +377,24 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
     currentPage * itemsPerPage,
     (currentPage + 1) * itemsPerPage
   );
+  
+  // Navigation handlers
+  const handlePreviousPage = useCallback(() => {
+    setCurrentPage(Math.max(0, currentPage - 1));
+  }, [currentPage]);
+  
+  const handleNextPage = useCallback(() => {
+    setCurrentPage(Math.min(totalPages - 1, currentPage + 1));
+  }, [currentPage, totalPages]);
+  
+  const handleProvinceChange = useCallback((e) => {
+    setSelectedProvince(e.target.value);
+    setCurrentPage(0);
+  }, []);
+  
+  const toggleMobileMenu = useCallback(() => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  }, [mobileMenuOpen]);
   
   return (
     <>
@@ -481,7 +514,7 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
               <div className="flex items-center">
                 <button 
                   className="md:hidden transition-transform duration-300 hover:scale-110"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  onClick={toggleMobileMenu}
                 >
                   {mobileMenuOpen ? (
                     <CloseIcon className="text-white drop-shadow-lg" />
@@ -618,10 +651,7 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
               <select
                 id="province-filter"
                 value={selectedProvince}
-                onChange={(e) => {
-                  setSelectedProvince(e.target.value);
-                  setCurrentPage(0);
-                }}
+                onChange={handleProvinceChange}
                 className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-300 hover:border-gray-400"
                 aria-label="Filter gunung berdasarkan provinsi"
               >
@@ -636,7 +666,7 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
             {totalPages > 1 && (
               <nav className="flex items-center space-x-3" aria-label="Pagination">
                 <button
-                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  onClick={handlePreviousPage}
                   disabled={currentPage === 0}
                   className="p-3 rounded-full bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:scale-110 hover:shadow-lg"
                   aria-label="Halaman sebelumnya"
@@ -649,7 +679,7 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
                 </span>
                 
                 <button
-                  onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+                  onClick={handleNextPage}
                   disabled={currentPage === totalPages - 1}
                   className="p-3 rounded-full bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:scale-110 hover:shadow-lg"
                   aria-label="Halaman berikutnya"

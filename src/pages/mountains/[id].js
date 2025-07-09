@@ -1,12 +1,12 @@
 import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import Footer from "../../../components/footer";
 
-// SVG Icon Components
+// SVG Icon Components (keeping all existing icons)
 const ChevronLeftIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -58,7 +58,7 @@ const MapStyleIcon = () => (
 
 const Toggle3DIcon = () => (
   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
   </svg>
 );
 
@@ -68,14 +68,162 @@ const WeatherIcon = () => (
   </svg>
 );
 
-export default function Mountain({ mountain, directusPoints, directusLines, centerCoordinates }) {
+// Helper function to convert Directus GeoJSON data to standard format
+const convertDirectusGeoJSONToStandard = (directusData) => {
+  if (!directusData || !Array.isArray(directusData)) return [];
+  
+  return directusData.map(item => {
+    if (item.geom && item.geom.type && item.geom.coordinates) {
+      return {
+        id: item.id,
+        name: item.name || `Feature ${item.id}`,
+        description: item.description || '',
+        geometry: item.geom,
+        properties: {
+          ...item,
+          name: item.name || `Feature ${item.id}`,
+          description: item.description || ''
+        }
+      };
+    } else if (item.latitude && item.longitude) {
+      return {
+        id: item.id,
+        name: item.name,
+        description: item.description || '',
+        latitude: item.latitude,
+        longitude: item.longitude,
+        altitude: item.altitude || 0,
+        geometry: {
+          type: 'Point',
+          coordinates: [parseFloat(item.longitude), parseFloat(item.latitude), item.altitude || 0]
+        },
+        properties: {
+          ...item,
+          elevation: item.altitude || 0
+        }
+      };
+    } else if (item.coordinates) {
+      return {
+        id: item.id,
+        name: item.name,
+        description: item.description || '',
+        coordinates: item.coordinates,
+        geometry: {
+          type: 'LineString',
+          coordinates: item.coordinates
+        },
+        properties: {
+          ...item
+        }
+      };
+    }
+    
+    return null;
+  }).filter(item => item !== null);
+};
+
+// Helper function to separate points and lines from mixed data
+const separateGeoFeatures = (features) => {
+  const points = [];
+  const lines = [];
+  
+  features.forEach(feature => {
+    if (feature.geometry) {
+      if (feature.geometry.type === 'Point') {
+        points.push({
+          id: feature.id,
+          name: feature.name,
+          description: feature.description,
+          latitude: feature.geometry.coordinates[1],
+          longitude: feature.geometry.coordinates[0],
+          altitude: feature.geometry.coordinates[2] || 0,
+          elevation: feature.geometry.coordinates[2] || 0
+        });
+      } else if (feature.geometry.type === 'LineString') {
+        lines.push({
+          id: feature.id,
+          name: feature.name,
+          description: feature.description,
+          coordinates: feature.geometry.coordinates
+        });
+      }
+    } else if (feature.latitude && feature.longitude) {
+      points.push(feature);
+    } else if (feature.coordinates) {
+      lines.push(feature);
+    }
+  });
+  
+  return { points, lines };
+};
+
+// Helper function for weather emoji - moved outside component
+const getWeatherEmoji = (weather) => {
+  const weatherEmojis = {
+    'Clear': '☀️',
+    'Clouds': '☁️',
+    'Rain': '🌧️',
+    'Drizzle': '🌦️',
+    'Thunderstorm': '⛈️',
+    'Snow': '❄️',
+    'Mist': '🌫️',
+    'Fog': '🌫️',
+    'Haze': '🌫️'
+  };
+  return weatherEmojis[weather] || '🌤️';
+};
+
+// Helper function for time formatting - moved outside component
+const formatTime = (timestamp) => {
+  return new Date(timestamp * 1000).toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+// Haversine formula - moved outside component
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const distance = R * c;
+  return distance;
+};
+
+export default function Mountain({ mountain, directusData, directusPoints, directusLines, centerCoordinates }) {
   const mapContainerRef = useRef(null);
   const [is3D, setIs3D] = useState(false);
   const [map, setMap] = useState(null);
   const [mapStyle, setMapStyle] = useState('outdoor');
   const [showStyleBox, setShowStyleBox] = useState(false);
   const [showWeatherBox, setShowWeatherBox] = useState(false);
-  const key = 'Bt7BC1waN22lhYojEJO1'; // MapTiler Key
+  const key = 'Bt7BC1waN22lhYojEJO1';
+
+  // Process the data - handle both old format and new GeoJSON format
+  const [processedPoints, setProcessedPoints] = useState([]);
+  const [processedLines, setProcessedLines] = useState([]);
+  
+  useEffect(() => {
+    let points = [];
+    let lines = [];
+    
+    if (directusData && directusData.length > 0) {
+      const convertedFeatures = convertDirectusGeoJSONToStandard(directusData);
+      const separated = separateGeoFeatures(convertedFeatures);
+      points = separated.points;
+      lines = separated.lines;
+    } else {
+      points = directusPoints || [];
+      lines = directusLines || [];
+    }
+    
+    setProcessedPoints(points);
+    setProcessedLines(lines);
+  }, [directusData, directusPoints, directusLines]);
 
   // Trail distance calculation
   const [trailDistance, setTrailDistance] = useState(null);
@@ -83,17 +231,16 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
   const [pointsWithElevation, setPointsWithElevation] = useState([]);
   const [elevationLoading, setElevationLoading] = useState(false);
 
-  // Weather configuration - Updated to use One Call API 3.0 with coordinates
+  // Weather configuration
   const [weatherData, setWeatherData] = useState(null);
   const [showWeatherInfo, setShowWeatherInfo] = useState(false);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState(null);
-  const [peakCoordinates, setPeakCoordinates] = useState(null); // To store coordinates of the highest point
-  const openWeatherKey = '9cfcb16a346057f5282f5058f83f1d73'; // Updated API key
+  const [peakCoordinates, setPeakCoordinates] = useState(null);
+  const openWeatherKey = '9cfcb16a346057f5282f5058f83f1d73';
 
-  // Updated fetch weather data function to use the highest point's coordinates
+  // Fetch weather data function
   const fetchWeatherData = useCallback(async () => {
-    // Prioritize peak coordinates for weather data, fall back to center coordinates
     const coordinatesToUse = peakCoordinates || centerCoordinates;
     if (!openWeatherKey || !coordinatesToUse) return;
 
@@ -123,12 +270,12 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
 
   // Calculate trail distance from coordinates
   const calculateTrailDistance = useCallback(() => {
-    if (!directusLines || directusLines.length === 0) return null;
+    if (!processedLines || processedLines.length === 0) return null;
 
     let totalDistance = 0;
     const segments = [];
 
-    directusLines.forEach((line, lineIndex) => {
+    processedLines.forEach((line, lineIndex) => {
       if (line.coordinates && line.coordinates.length > 1) {
         let segmentDistance = 0;
         
@@ -136,7 +283,6 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
           const [lon1, lat1] = line.coordinates[i];
           const [lon2, lat2] = line.coordinates[i + 1];
           
-          // Calculate distance using Haversine formula
           const distance = calculateDistance(lat1, lon1, lat2, lon2);
           segmentDistance += distance;
         }
@@ -155,41 +301,26 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
 
     setTrailSegments(segments);
     return totalDistance;
-  }, [directusLines]);
+  }, [processedLines]);
 
-  // Haversine formula to calculate distance between two points
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c; // Distance in kilometers
-    return distance;
-  };
-
-  // Calculate trail distance when component mounts or lines change
+  // Calculate trail distance when lines change
   useEffect(() => {
     const distance = calculateTrailDistance();
     setTrailDistance(distance);
   }, [calculateTrailDistance]);
 
-  // Fetch elevation data for points and find the highest point
+  // Fetch elevation data for points
   const fetchElevationData = useCallback(async () => {
-    if (!directusPoints || directusPoints.length === 0) return;
+    if (!processedPoints || processedPoints.length === 0) return;
 
     setElevationLoading(true);
     
     try {
-      // Prepare locations array for batch request
-      const locations = directusPoints.map(point => ({
+      const locations = processedPoints.map(point => ({
         latitude: parseFloat(point.latitude),
         longitude: parseFloat(point.longitude)
       }));
 
-      // Use Open Elevation API (free service)
       const response = await fetch('https://api.open-elevation.com/api/v1/lookup', {
         method: 'POST',
         headers: {
@@ -203,14 +334,12 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
       if (response.ok) {
         const data = await response.json();
         
-        // Combine original points with elevation data
-        const pointsWithElevationData = directusPoints.map((point, index) => ({
+        const pointsWithElevationData = processedPoints.map((point, index) => ({
           ...point,
-          elevation: data.results[index]?.elevation || null,
-          elevationError: !data.results[index]?.elevation
+          elevation: data.results[index]?.elevation || point.altitude || point.elevation || null,
+          elevationError: !data.results[index]?.elevation && !point.altitude && !point.elevation
         }));
 
-        // Find the point with the highest elevation from valid results
         const validPoints = pointsWithElevationData.filter(p => p.elevation !== null);
         if (validPoints.length > 0) {
           const highestPoint = validPoints.reduce(
@@ -225,25 +354,23 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
         setPointsWithElevation(pointsWithElevationData);
       } else {
         console.warn('Failed to fetch elevation data');
-        // Fallback: use original points without elevation
-        setPointsWithElevation(directusPoints.map(point => ({
+        setPointsWithElevation(processedPoints.map(point => ({
           ...point,
-          elevation: null,
-          elevationError: true
+          elevation: point.altitude || point.elevation || null,
+          elevationError: !point.altitude && !point.elevation
         })));
       }
     } catch (error) {
       console.error('Error fetching elevation data:', error);
-      // Fallback: use original points without elevation
-      setPointsWithElevation(directusPoints.map(point => ({
+      setPointsWithElevation(processedPoints.map(point => ({
         ...point,
-        elevation: null,
-        elevationError: true
+        elevation: point.altitude || point.elevation || null,
+        elevationError: !point.altitude && !point.elevation
       })));
     } finally {
       setElevationLoading(false);
     }
-  }, [directusPoints]);
+  }, [processedPoints]);
 
   // Fetch elevation data when points change
   useEffect(() => {
@@ -257,106 +384,161 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     }
   }, [peakCoordinates, fetchWeatherData]);
 
-  const addSourceAndLayers = useCallback((map) => {
-    // Use points with elevation data if available, otherwise fall back to original points
-    const pointsToUse = pointsWithElevation.length > 0 ? pointsWithElevation : directusPoints;
-    
-    // Add source for directus points
-    if (pointsToUse.length && !map.getSource('directus-points')) {
-      map.addSource('directus-points', {
+  // Memoized addSourceAndLayers function
+  const addSourceAndLayers = useMemo(() => {
+    return (map) => {
+      const pointsToUse = pointsWithElevation.length > 0 ? pointsWithElevation : processedPoints;
+      
+      // Add source for points
+      if (pointsToUse.length && !map.getSource('directus-points')) {
+        map.addSource('directus-points', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: pointsToUse.map((point) => ({
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [parseFloat(point.longitude), parseFloat(point.latitude)]
+              },
+              properties: {
+                name: point.name,
+                description: point.description || 'No description available',
+                elevation: point.elevation || null,
+                elevationError: point.elevationError || false
+              }
+            }))
+          }
+        });
+
+        if (!map.getLayer('points-layer')) {
+          map.addLayer({
+            id: 'points-layer',
+            type: 'circle',
+            source: 'directus-points',
+            paint: {
+              'circle-radius': 8,
+              'circle-color': '#10b981',
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#ffffff'
+            }
+          });
+        }
+      }
+
+      // Add source for lines
+      if (processedLines.length && !map.getSource('directus-lines')) {
+        map.addSource('directus-lines', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: processedLines.map((line, index) => ({
+              type: 'Feature',
+              geometry: {
+                type: 'LineString',
+                coordinates: line.coordinates
+              },
+              properties: {
+                id: index,
+                name: line.name || `Jalur ${index + 1}`,
+                description: line.description || 'Tidak ada deskripsi',
+                distance: trailSegments.find(seg => seg.id === index)?.distance || 0
+              }
+            }))
+          }
+        });
+
+        if (!map.getLayer('lines-layer')) {
+          map.addLayer({
+            id: 'lines-layer',
+            type: 'line',
+            source: 'directus-lines',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#10b981',
+              'line-width': 4,
+              'line-opacity': 0.8
+            }
+          });
+        }
+
+        if (!map.getLayer('lines-hover')) {
+          map.addLayer({
+            id: 'lines-hover',
+            type: 'line',
+            source: 'directus-lines',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#059669',
+              'line-width': 6,
+              'line-opacity': 0
+            },
+            filter: ['==', ['get', 'id'], '']
+          });
+        }
+      }
+    };
+  }, [processedPoints, processedLines, trailSegments, pointsWithElevation]);
+
+  // Add weather marker function
+  const addWeatherMarker = useCallback(() => {
+    if (!map || !weatherData || !weatherData.current) return;
+    const coordinatesToUse = peakCoordinates || centerCoordinates;
+
+    try {
+      if (map.getSource && map.getSource('weather-marker')) {
+        if (map.getLayer('weather-marker')) {
+          map.removeLayer('weather-marker');
+        }
+        map.removeSource('weather-marker');
+      }
+
+      map.addSource('weather-marker', {
         type: 'geojson',
         data: {
           type: 'FeatureCollection',
-          features: pointsToUse.map((point) => ({
+          features: [{
             type: 'Feature',
             geometry: {
               type: 'Point',
-              coordinates: [parseFloat(point.longitude), parseFloat(point.latitude)]
+              coordinates: coordinatesToUse
             },
             properties: {
-              name: point.name,
-              description: point.description || 'No description available',
-              elevation: point.elevation || null,
-              elevationError: point.elevationError || false
+              weather: weatherData.current.weather[0].main,
+              temp: Math.round(weatherData.current.temp),
+              description: weatherData.current.weather[0].description
             }
-          }))
+          }]
         }
       });
 
-      if (!map.getLayer('points-layer')) {
-        map.addLayer({
-          id: 'points-layer',
-          type: 'circle',
-          source: 'directus-points',
-          paint: {
-            'circle-radius': 8,
-            'circle-color': '#10b981',
-            'circle-stroke-width': 2,
-            'circle-stroke-color': '#ffffff'
-          }
-        });
-      }
-    }
-
-    // Add source for directus lines with individual trail segments
-    if (directusLines.length && !map.getSource('directus-lines')) {
-      map.addSource('directus-lines', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: directusLines.map((line, index) => ({
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: line.coordinates
-            },
-            properties: {
-              id: index,
-              name: line.name || `Jalur ${index + 1}`,
-              description: line.description || 'Tidak ada deskripsi',
-              distance: trailSegments.find(seg => seg.id === index)?.distance || 0
-            }
-          }))
+      map.addLayer({
+        id: 'weather-marker',
+        type: 'symbol',
+        source: 'weather-marker',
+        layout: {
+          'text-field': getWeatherEmoji(weatherData.current.weather[0].main) + '\n{temp}°C',
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 20,
+          'text-anchor': 'bottom',
+          'text-offset': [0, -1]
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': '#000000',
+          'text-halo-width': 2
         }
       });
-
-      if (!map.getLayer('lines-layer')) {
-        map.addLayer({
-          id: 'lines-layer',
-          type: 'line',
-          source: 'directus-lines',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#10b981',
-            'line-width': 4,
-            'line-opacity': 0.8
-          }
-        });
-      }
-
-      // Add hover layer for better visual feedback
-      if (!map.getLayer('lines-hover')) {
-        map.addLayer({
-          id: 'lines-hover',
-          type: 'line',
-          source: 'directus-lines',
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          paint: {
-            'line-color': '#059669',
-            'line-width': 6,
-            'line-opacity': 0
-          },
-          filter: ['==', ['get', 'id'], '']
-        });
-      }
+    } catch (error) {
+      console.error('Error adding weather marker:', error);
     }
-  }, [directusPoints, directusLines, trailSegments, pointsWithElevation]);
+  }, [map, weatherData, centerCoordinates, peakCoordinates]);
 
   const toggle3D = () => {
     if (map) {
@@ -379,6 +561,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     }
   };
 
+  // Fixed changeMapStyle with proper dependencies
   const changeMapStyle = useCallback((newStyle) => {
     if (map) {
       const currentCenter = map.getCenter();
@@ -405,7 +588,6 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
         
         addSourceAndLayers(map);
         
-        // Add weather marker if weather data is available
         if (weatherData) {
           addWeatherMarker();
         }
@@ -414,92 +596,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     } else {
       setMapStyle(newStyle);
     }
-  }, [map, is3D, addSourceAndLayers, key, weatherData]);
-
-  const addWeatherMarker = useCallback(() => {
-    if (!map || !weatherData || !weatherData.current) return;
-    const coordinatesToUse = peakCoordinates || centerCoordinates; // Use peak coordinates if available
-
-    try {
-      // Remove existing weather marker if it exists
-      if (map.getSource && map.getSource('weather-marker')) {
-        if (map.getLayer('weather-marker')) {
-          map.removeLayer('weather-marker');
-        }
-        map.removeSource('weather-marker');
-      }
-
-      // Add weather marker to the correct coordinates
-      map.addSource('weather-marker', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: coordinatesToUse
-            },
-            properties: {
-              weather: weatherData.current.weather[0].main,
-              temp: Math.round(weatherData.current.temp),
-              description: weatherData.current.weather[0].description
-            }
-          }]
-        }
-      });
-
-      // Add weather symbol layer
-      map.addLayer({
-        id: 'weather-marker',
-        type: 'symbol',
-        source: 'weather-marker',
-        layout: {
-          'text-field': getWeatherEmoji(weatherData.current.weather[0].main) + '\n{temp}°C',
-          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-          'text-size': 20,
-          'text-anchor': 'bottom',
-          'text-offset': [0, -1]
-        },
-        paint: {
-          'text-color': '#ffffff',
-          'text-halo-color': '#000000',
-          'text-halo-width': 2
-        }
-      });
-    } catch (error) {
-      console.error('Error adding weather marker:', error);
-    }
-  }, [map, weatherData, centerCoordinates, peakCoordinates]);
-
-  // Helper function to get weather emoji
-  const getWeatherEmoji = (weather) => {
-    const weatherEmojis = {
-      'Clear': '☀️',
-      'Clouds': '☁️',
-      'Rain': '🌧️',
-      'Drizzle': '🌦️',
-      'Thunderstorm': '⛈️',
-      'Snow': '❄️',
-      'Mist': '🌫️',
-      'Fog': '🌫️',
-      'Haze': '🌫️'
-    };
-    return weatherEmojis[weather] || '🌤️';
-  };
-
-  // Helper function to convert Kelvin to Celsius
-  const kelvinToCelsius = (kelvin) => {
-    return Math.round(kelvin - 273.15);
-  };
-
-  // Helper function to format timestamp
-  const formatTime = (timestamp) => {
-    return new Date(timestamp * 1000).toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  }, [map, is3D, addSourceAndLayers, key, weatherData, addWeatherMarker]);
 
   const toggleWeatherInfo = () => {
     setShowWeatherInfo(!showWeatherInfo);
@@ -508,6 +605,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     }
   };
 
+  // Map initialization - split into separate useEffect
   useEffect(() => {
     if (typeof window === 'undefined' || !mapContainerRef.current) return;
 
@@ -523,96 +621,120 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     newMap.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showUserHeading: true }), 'bottom-right');
 
     newMap.on('load', () => {
-      addSourceAndLayers(newMap);
-
-      const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
-
-      // Point hover events
-      newMap.on('mouseenter', 'points-layer', (e) => {
-        newMap.getCanvas().style.cursor = 'pointer';
-        const coordinates = e.features[0].geometry.coordinates.slice();
-        const properties = e.features[0].properties;
-        
-        let elevationInfo = '';
-        if (properties.elevation !== null && !properties.elevationError) {
-          elevationInfo = `<br>Ketinggian: ${Math.round(properties.elevation)} m`;
-        } else if (elevationLoading) {
-          elevationInfo = '<br>Ketinggian: Memuat...';
-        } else {
-          elevationInfo = '<br>Ketinggian: Tidak tersedia';
-        }
-        
-        const description = `<strong>${properties.name}</strong><br>${properties.description}<br>Koordinat: [${coordinates[0].toFixed(5)}, ${coordinates[1].toFixed(5)}]${elevationInfo}`;
-        popup.setLngLat(coordinates).setHTML(description).addTo(newMap);
-      });
-
-      newMap.on('mouseleave', 'points-layer', () => {
-        newMap.getCanvas().style.cursor = '';
-        popup.remove();
-      });
-
-      // Line click events for trail segments
-      newMap.on('click', 'lines-layer', (e) => {
-        const feature = e.features[0];
-        const segmentId = feature.properties.id;
-        const segment = trailSegments.find(seg => seg.id === segmentId);
-        
-        if (segment) {
-          const coordinates = e.lngLat;
-          
-          const trailPopup = new maplibregl.Popup({ closeOnClick: true })
-            .setLngLat(coordinates)
-            .setHTML(`
-              <div class="trail-popup" style="min-width: 200px; padding: 8px;">
-                <div style="font-weight: bold; color: #059669; margin-bottom: 8px; font-size: 14px;">
-                  📍 ${segment.name}
-                </div>
-                <div style="margin-bottom: 6px; font-size: 12px; color: #6b7280;">
-                  ${segment.description}
-                </div>
-                <div style="background: #f0fdf4; padding: 8px; border-radius: 6px; border-left: 3px solid #10b981;">
-                  <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Panjang Jalur</div>
-                  <div style="font-weight: bold; color: #059669; font-size: 16px;">
-                    📏 ${segment.distance.toFixed(2)} km
-                  </div>
-                </div>
-                <div style="margin-top: 8px; font-size: 10px; color: #9ca3af; text-align: center;">
-                  Klik jalur lain untuk melihat detail lainnya
-                </div>
-              </div>
-            `)
-            .addTo(newMap);
-        }
-      });
-
-      // Line hover events
-      newMap.on('mouseenter', 'lines-layer', (e) => {
-        newMap.getCanvas().style.cursor = 'pointer';
-        const segmentId = e.features[0].properties.id;
-        
-        // Highlight the hovered line
-        newMap.setFilter('lines-hover', ['==', ['get', 'id'], segmentId]);
-        newMap.setPaintProperty('lines-hover', 'line-opacity', 0.6);
-      });
-
-      newMap.on('mouseleave', 'lines-layer', () => {
-        newMap.getCanvas().style.cursor = '';
-        
-        // Remove highlight
-        newMap.setPaintProperty('lines-hover', 'line-opacity', 0);
-        newMap.setFilter('lines-hover', ['==', ['get', 'id'], '']);
-      });
-
-      // Fetch initial weather data when map loads
       fetchWeatherData();
     });
 
     setMap(newMap);
 
     return () => newMap && newMap.remove();
-  }, [centerCoordinates, addSourceAndLayers, key, fetchWeatherData]);
+  }, [centerCoordinates, key, fetchWeatherData, mapStyle]);
 
-  // Update weather marker when weather data changes
+  // Add layers when map and data are ready
+  useEffect(() => {
+    if (map && (processedPoints.length > 0 || processedLines.length > 0)) {
+      addSourceAndLayers(map);
+    }
+  }, [map, addSourceAndLayers, processedPoints.length, processedLines.length]);
+
+  // Add map event listeners
+  useEffect(() => {
+    if (!map) return;
+
+    const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+
+    // Point hover events
+    const onPointMouseEnter = (e) => {
+      map.getCanvas().style.cursor = 'pointer';
+      const coordinates = e.features[0].geometry.coordinates.slice();
+      const properties = e.features[0].properties;
+      
+      let elevationInfo = '';
+      if (properties.elevation !== null && !properties.elevationError) {
+        elevationInfo = `<br>Ketinggian: ${Math.round(properties.elevation)} m`;
+      } else if (elevationLoading) {
+        elevationInfo = '<br>Ketinggian: Memuat...';
+      } else {
+        elevationInfo = '<br>Ketinggian: Tidak tersedia';
+      }
+      
+      const description = `<strong>${properties.name}</strong><br>${properties.description}<br>Koordinat: [${coordinates[0].toFixed(5)}, ${coordinates[1].toFixed(5)}]${elevationInfo}`;
+      popup.setLngLat(coordinates).setHTML(description).addTo(map);
+    };
+
+    const onPointMouseLeave = () => {
+      map.getCanvas().style.cursor = '';
+      popup.remove();
+    };
+
+    // Line click events
+    const onLineClick = (e) => {
+      const feature = e.features[0];
+      const segmentId = feature.properties.id;
+      const segment = trailSegments.find(seg => seg.id === segmentId);
+      
+      if (segment) {
+        const coordinates = e.lngLat;
+        
+        const trailPopup = new maplibregl.Popup({ closeOnClick: true })
+          .setLngLat(coordinates)
+          .setHTML(`
+            <div class="trail-popup" style="min-width: 200px; padding: 8px;">
+              <div style="font-weight: bold; color: #059669; margin-bottom: 8px; font-size: 14px;">
+                📍 ${segment.name}
+              </div>
+              <div style="margin-bottom: 6px; font-size: 12px; color: #6b7280;">
+                ${segment.description}
+              </div>
+              <div style="background: #f0fdf4; padding: 8px; border-radius: 6px; border-left: 3px solid #10b981;">
+                <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Panjang Jalur</div>
+                <div style="font-weight: bold; color: #059669; font-size: 16px;">
+                  📏 ${segment.distance.toFixed(2)} km
+                </div>
+              </div>
+              <div style="margin-top: 8px; font-size: 10px; color: #9ca3af; text-align: center;">
+                Klik jalur lain untuk melihat detail lainnya
+              </div>
+            </div>
+          `)
+          .addTo(map);
+      }
+    };
+
+    // Line hover events
+    const onLineMouseEnter = (e) => {
+      map.getCanvas().style.cursor = 'pointer';
+      const segmentId = e.features[0].properties.id;
+      
+      map.setFilter('lines-hover', ['==', ['get', 'id'], segmentId]);
+      map.setPaintProperty('lines-hover', 'line-opacity', 0.6);
+    };
+
+    const onLineMouseLeave = () => {
+      map.getCanvas().style.cursor = '';
+      map.setPaintProperty('lines-hover', 'line-opacity', 0);
+      map.setFilter('lines-hover', ['==', ['get', 'id'], '']);
+    };
+
+    // Add event listeners
+    map.on('mouseenter', 'points-layer', onPointMouseEnter);
+    map.on('mouseleave', 'points-layer', onPointMouseLeave);
+    map.on('click', 'lines-layer', onLineClick);
+    map.on('mouseenter', 'lines-layer', onLineMouseEnter);
+    map.on('mouseleave', 'lines-layer', onLineMouseLeave);
+
+    // Cleanup function
+    return () => {
+      if (map) {
+        map.off('mouseenter', 'points-layer', onPointMouseEnter);
+        map.off('mouseleave', 'points-layer', onPointMouseLeave);
+        map.off('click', 'lines-layer', onLineClick);
+        map.off('mouseenter', 'lines-layer', onLineMouseEnter);
+        map.off('mouseleave', 'lines-layer', onLineMouseLeave);
+      }
+    };
+  }, [map, trailSegments, elevationLoading]);
+
+  // Add weather marker when weather data changes
   useEffect(() => {
     if (map && weatherData) {
       addWeatherMarker();
@@ -655,7 +777,6 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     if (text.includes('<p>') || text.includes('<br')) {
       return text;
     }
-    // Simple markdown processing
     let processed = text
       .replace(/\n\n+/g, '<p>')
       .replace(/\n/g, '<br />');
@@ -667,7 +788,6 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     return text.replace(/<[^>]*>?/gm, '').trim();
   };
 
-  // Generate page title and description
   const pageTitle = `Jalur Pendakian Gunung ${mountain.name} - ${mountain.kota}, ${mountain.provinsi} | TrailView ID`;
   const pageDescription = `Informasi lengkap jalur pendakian Gunung ${mountain.name} di ${mountain.kota}, ${mountain.provinsi}. ${mountain.penjelasan ? stripHtmlTags(processDescription(mountain.penjelasan)).substring(0, 100) + '...' : `Ketinggian ${mountain.elevation || mountain.elevation_gain || 'N/A'}m, tingkat kesulitan ${getDifficultyText(mountain.difficulty)}, estimasi waktu ${mountain.estimated_time || 'N/A'}.`}`;
   const pageKeywords = `gunung ${mountain.name}, jalur pendakian ${mountain.name}, ${mountain.name} ${mountain.provinsi}, hiking ${mountain.name}, trekking ${mountain.name}, basecamp ${mountain.name}, rute pendakian ${mountain.name}`;
@@ -761,6 +881,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
       </Head>
       
       <main className="min-h-screen bg-gray-50">
+        {/* Hero Section */}
         <section className="relative h-[70vh] min-h-[500px] overflow-hidden">
           {mountain.image ? (
             <Image
@@ -808,6 +929,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
           </div>
         </section>
         
+        {/* Stats Section */}
         <section className="bg-white shadow-sm border-b">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
@@ -865,9 +987,11 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
           </div>
         </section>
         
+        {/* Main Content */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid lg:grid-cols-3 gap-12">
             <div className="lg:col-span-2">
+              {/* Description */}
               <div className="bg-white rounded-2xl shadow-sm p-8 mb-8 animate-fade-in-up">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                   <span className="w-1 h-8 bg-green-500 rounded-full mr-4"></span>
@@ -885,6 +1009,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                 )}
               </div>
               
+              {/* Requirements */}
               {mountain.persyaratan && (
                 <div className="bg-white rounded-2xl shadow-sm p-8 mb-8 animate-fade-in-up">
                   <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
@@ -898,6 +1023,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                 </div>
               )}
               
+              {/* Map Section */}
               <div className="bg-white rounded-2xl shadow-sm p-8 animate-fade-in-up">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
                   <span className="w-1 h-8 bg-green-500 rounded-full mr-4"></span>
@@ -908,6 +1034,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                   <div className="map-container mb-6">
                     <div id="map" ref={mapContainerRef} className="map-container"></div>
                     
+                    {/* Map Controls */}
                     <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
                       <button 
                         onClick={toggle3D} 
@@ -929,6 +1056,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                         <WeatherIcon />
                       </button>
 
+                      {/* Weather Info Box */}
                       {showWeatherInfo && (
                         <div className="absolute top-0 left-16 bg-white rounded-lg shadow-xl p-4 w-80 animate-fade-in z-20">
                           <div className="flex justify-between items-center mb-3">
@@ -987,25 +1115,8 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                                   <div className="text-gray-600">Tekanan</div>
                                   <div className="font-semibold">{weatherData.current.pressure} hPa</div>
                                 </div>
-                                <div className="bg-gray-50 p-2 rounded">
-                                  <div className="text-gray-600">Jarak Pandang</div>
-                                  <div className="font-semibold">{(weatherData.current.visibility / 1000).toFixed(1)} km</div>
-                                </div>
-                                <div className="bg-gray-50 p-2 rounded">
-                                  <div className="text-gray-600">Awan</div>
-                                  <div className="font-semibold">{weatherData.current.clouds}%</div>
-                                </div>
-                                <div className="bg-gray-50 p-2 rounded">
-                                  <div className="text-gray-600">UV Index</div>
-                                  <div className="font-semibold">{weatherData.current.uvi || 0}</div>
-                                </div>
-                                <div className="bg-gray-50 p-2 rounded">
-                                  <div className="text-gray-600">Titik Embun</div>
-                                  <div className="font-semibold">{Math.round(weatherData.current.dew_point)}°C</div>
-                                </div>
                               </div>
                               
-                              {/* Weather Alerts */}
                               {weatherData.alerts && weatherData.alerts.length > 0 && (
                                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                                   <div className="text-red-800 font-semibold text-sm mb-1">⚠️ Peringatan Cuaca</div>
@@ -1027,7 +1138,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                               </div>
                               
                               <div className="text-xs text-gray-500 text-center mt-3">
-                                Data dari OpenWeatherMap • {peakCoordinates ? 'Puncak' : 'Area'}: {(peakCoordinates || centerCoordinates)[1].toFixed(4)}, {(peakCoordinates || centerCoordinates)[0].toFixed(4)}
+                                Data dari OpenWeatherMap
                               </div>
                             </div>
                           ) : (
@@ -1045,6 +1156,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                       )}
                     </div>
                     
+                    {/* Style Control */}
                     <div className="absolute bottom-4 left-4 z-10">
                       <button
                         onClick={toggleStyleBox}
@@ -1100,6 +1212,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
               </div>
             </div>
             
+            {/* Sidebar */}
             <div className="lg:col-span-1">
               {/* Trail Statistics */}
               {trailDistance && (
@@ -1196,6 +1309,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                 </div>
               )}
               
+              {/* Weather Info Card */}
               <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 animate-fade-in-up mb-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Info Cuaca</h3>
                 <p className="text-gray-600 mb-3">
@@ -1330,39 +1444,91 @@ export async function getStaticProps({ params }) {
   const mountainData = await mountainRes.json();
   const mountain = mountainData.data;
 
-  const pointKey = mountain.point || 'point_burangrang';
-  const trackKey = mountain.track || 'jalur_burangrang';
-
-  const resPoints = await fetch(`https://adrianfirmansyah-website.my.id/trailview/items/${pointKey}`);
-  const pointsData = await resPoints.json();
-  const directusPoints = pointsData.data || [];
-
-  const resLines = await fetch(`https://adrianfirmansyah-website.my.id/trailview/items/${trackKey}`);
-  const linesData = await resLines.json();
-  const directusLines = linesData.data || [];
-
+  let directusData = [];
+  let directusPoints = [];
+  let directusLines = [];
   let centerCoordinates = [107.601529, -6.917464]; // Default coordinates
 
-  if (directusPoints.length > 0) {
-    const startPoint = directusPoints.find(point => 
-      point.name.toLowerCase().includes('start') || 
-      point.name.toLowerCase().includes('puncak') ||
-      point.id === 1
-    ) || directusPoints[0];
-    
-    if (startPoint && startPoint.latitude && startPoint.longitude) {
-      centerCoordinates = [parseFloat(startPoint.longitude), parseFloat(startPoint.latitude)];
+  try {
+    const pointKey = mountain.point || 'point_burangrang';
+    const trackKey = mountain.track || 'jalur_burangrang';
+
+    // Try to fetch from a unified collection if it exists
+    try {
+      const geoDataRes = await fetch(`https://adrianfirmansyah-website.my.id/trailview/items/geo_features?filter[mountain_id][_eq]=${params.id}`);
+      if (geoDataRes.ok) {
+        const geoData = await geoDataRes.json();
+        directusData = geoData.data || [];
+      }
+    } catch (error) {
+      console.log('No unified geo collection found, using separate collections');
     }
-  } else if (directusLines.length > 0 && directusLines[0].coordinates && directusLines[0].coordinates.length > 0) {
-    const firstCoord = directusLines[0].coordinates[0];
-    centerCoordinates = [firstCoord[0], firstCoord[1]];
+
+    // If no unified data, fall back to separate point and track collections
+    if (directusData.length === 0) {
+      // Fetch points
+      try {
+        const resPoints = await fetch(`https://adrianfirmansyah-website.my.id/trailview/items/${pointKey}`);
+        if (resPoints.ok) {
+          const pointsData = await resPoints.json();
+          directusPoints = pointsData.data || [];
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch points from ${pointKey}:`, error);
+      }
+
+      // Fetch lines/tracks
+      try {
+        const resLines = await fetch(`https://adrianfirmansyah-website.my.id/trailview/items/${trackKey}`);
+        if (resLines.ok) {
+          const linesData = await resLines.json();
+          directusLines = linesData.data || [];
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch lines from ${trackKey}:`, error);
+      }
+    }
+
+    // Determine center coordinates
+    if (directusData.length > 0) {
+      // Find center from GeoJSON data
+      const firstFeature = directusData.find(item => item.geom);
+      if (firstFeature && firstFeature.geom) {
+        if (firstFeature.geom.type === 'Point') {
+          centerCoordinates = firstFeature.geom.coordinates.slice(0, 2);
+        } else if (firstFeature.geom.type === 'LineString' && firstFeature.geom.coordinates.length > 0) {
+          centerCoordinates = firstFeature.geom.coordinates[0].slice(0, 2);
+        }
+      }
+    } else if (directusPoints.length > 0) {
+      // Use old point format
+      const startPoint = directusPoints.find(point => 
+        point.name && (
+          point.name.toLowerCase().includes('start') || 
+          point.name.toLowerCase().includes('puncak')
+        )
+      ) || directusPoints[0];
+      
+      if (startPoint && startPoint.latitude && startPoint.longitude) {
+        centerCoordinates = [parseFloat(startPoint.longitude), parseFloat(startPoint.latitude)];
+      }
+    } else if (directusLines.length > 0 && directusLines[0].coordinates && directusLines[0].coordinates.length > 0) {
+      // Use old line format
+      const firstCoord = directusLines[0].coordinates[0];
+      centerCoordinates = [firstCoord[0], firstCoord[1]];
+    }
+
+  } catch (error) {
+    console.error('Error fetching trail data:', error);
+    // Continue with empty data and default coordinates
   }
 
   return {
     props: {
       mountain,
-      directusPoints,
-      directusLines,
+      directusData, // New GeoJSON format data
+      directusPoints, // Fallback old format
+      directusLines, // Fallback old format  
       centerCoordinates
     },
     revalidate: 10,
