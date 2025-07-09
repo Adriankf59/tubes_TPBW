@@ -195,6 +195,14 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 export default function Mountain({ mountain, directusData, directusPoints, directusLines, centerCoordinates }) {
+  console.log('=== MOUNTAIN COMPONENT PROPS ===');
+  console.log('Mountain:', mountain?.name);
+  console.log('DirectusData:', directusData?.length || 0, 'items');
+  console.log('DirectusPoints:', directusPoints?.length || 0, 'items');
+  console.log('DirectusLines:', directusLines?.length || 0, 'items');
+  console.log('CenterCoordinates:', centerCoordinates);
+  console.log('=================================');
+
   const mapContainerRef = useRef(null);
   const [is3D, setIs3D] = useState(false);
   const [map, setMap] = useState(null);
@@ -204,23 +212,36 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
   const [showWeatherBox, setShowWeatherBox] = useState(false);
   const key = 'Bt7BC1waN22lhYojEJO1';
 
-  // Process the data - handle both old format and new GeoJSON format
+  // Process the data - handle both old format and new GeoJSON format - WITH DEBUGGING
   const [processedPoints, setProcessedPoints] = useState([]);
   const [processedLines, setProcessedLines] = useState([]);
   
   useEffect(() => {
+    console.log('=== DATA PROCESSING ===');
+    console.log('DirectusData:', directusData);
+    console.log('DirectusPoints:', directusPoints);
+    console.log('DirectusLines:', directusLines);
+    
     let points = [];
     let lines = [];
     
     if (directusData && directusData.length > 0) {
+      console.log('Processing directusData...');
       const convertedFeatures = convertDirectusGeoJSONToStandard(directusData);
       const separated = separateGeoFeatures(convertedFeatures);
       points = separated.points;
       lines = separated.lines;
+      console.log('From directusData - Points:', points.length, 'Lines:', lines.length);
     } else {
+      console.log('Using fallback directusPoints and directusLines...');
       points = directusPoints || [];
       lines = directusLines || [];
+      console.log('From fallback - Points:', points.length, 'Lines:', lines.length);
     }
+    
+    console.log('Final processed - Points:', points.length, 'Lines:', lines.length);
+    console.log('Sample point:', points[0]);
+    console.log('Sample line:', lines[0]);
     
     setProcessedPoints(points);
     setProcessedLines(lines);
@@ -385,19 +406,30 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
     }
   }, [peakCoordinates, fetchWeatherData]);
 
-  // Function to setup map event listeners
+  // Function to setup map event listeners - SIMPLIFIED AND STABLE
   const setupMapEventListeners = useCallback((mapInstance) => {
-    if (!mapInstance) return;
+    if (!mapInstance || 
+        typeof mapInstance.getLayer !== 'function' ||
+        typeof mapInstance.on !== 'function' ||
+        typeof mapInstance.off !== 'function') {
+      console.log('Map instance not ready for event listeners');
+      return;
+    }
 
-    // Remove existing event listeners first
-    mapInstance.off('mouseenter', 'points-layer');
-    mapInstance.off('mouseleave', 'points-layer');
-    mapInstance.off('click', 'lines-layer');
-    mapInstance.off('mouseenter', 'lines-layer');
-    mapInstance.off('mouseleave', 'lines-layer');
+    console.log('Setting up map event listeners...');
+
+    // Remove existing event listeners first to prevent duplicates
+    try {
+      mapInstance.off('mouseenter', 'points-layer');
+      mapInstance.off('mouseleave', 'points-layer');
+      mapInstance.off('click', 'lines-layer');
+      mapInstance.off('mouseenter', 'lines-layer');
+      mapInstance.off('mouseleave', 'lines-layer');
+    } catch (e) {
+      // Ignore errors if listeners don't exist
+    }
 
     const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
-    const pointsToUse = pointsWithElevation.length > 0 ? pointsWithElevation : processedPoints;
 
     // Point hover events
     const onPointMouseEnter = (e) => {
@@ -409,8 +441,6 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       let elevationInfo = '';
       if (properties.elevation !== null && !properties.elevationError) {
         elevationInfo = `<br>Ketinggian: ${Math.round(properties.elevation)} m`;
-      } else if (elevationLoading) {
-        elevationInfo = '<br>Ketinggian: Memuat...';
       } else {
         elevationInfo = '<br>Ketinggian: Tidak tersedia';
       }
@@ -430,34 +460,34 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       console.log('Line click triggered');
       const feature = e.features[0];
       const segmentId = feature.properties.id;
-      const segment = trailSegments.find(seg => seg.id === segmentId);
+      const distance = feature.properties.distance;
+      const name = feature.properties.name;
+      const description = feature.properties.description;
       
-      if (segment) {
-        const coordinates = e.lngLat;
-        
-        const trailPopup = new maplibregl.Popup({ closeOnClick: true })
-          .setLngLat(coordinates)
-          .setHTML(`
-            <div class="trail-popup" style="min-width: 200px; padding: 8px;">
-              <div style="font-weight: bold; color: #059669; margin-bottom: 8px; font-size: 14px;">
-                📍 ${segment.name}
-              </div>
-              <div style="margin-bottom: 6px; font-size: 12px; color: #6b7280;">
-                ${segment.description}
-              </div>
-              <div style="background: #f0fdf4; padding: 8px; border-radius: 6px; border-left: 3px solid #10b981;">
-                <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Panjang Jalur</div>
-                <div style="font-weight: bold; color: #059669; font-size: 16px;">
-                  📏 ${segment.distance.toFixed(2)} km
-                </div>
-              </div>
-              <div style="margin-top: 8px; font-size: 10px; color: #9ca3af; text-align: center;">
-                Klik jalur lain untuk melihat detail lainnya
+      const coordinates = e.lngLat;
+      
+      const trailPopup = new maplibregl.Popup({ closeOnClick: true })
+        .setLngLat(coordinates)
+        .setHTML(`
+          <div class="trail-popup" style="min-width: 200px; padding: 8px;">
+            <div style="font-weight: bold; color: #059669; margin-bottom: 8px; font-size: 14px;">
+              📍 ${name}
+            </div>
+            <div style="margin-bottom: 6px; font-size: 12px; color: #6b7280;">
+              ${description}
+            </div>
+            <div style="background: #f0fdf4; padding: 8px; border-radius: 6px; border-left: 3px solid #10b981;">
+              <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Panjang Jalur</div>
+              <div style="font-weight: bold; color: #059669; font-size: 16px;">
+                📏 ${distance ? distance.toFixed(2) : 'N/A'} km
               </div>
             </div>
-          `)
-          .addTo(mapInstance);
-      }
+            <div style="margin-top: 8px; font-size: 10px; color: #9ca3af; text-align: center;">
+              Klik jalur lain untuk melihat detail lainnya
+            </div>
+          </div>
+        `)
+        .addTo(mapInstance);
     };
 
     // Line hover events
@@ -466,18 +496,29 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       mapInstance.getCanvas().style.cursor = 'pointer';
       const segmentId = e.features[0].properties.id;
       
-      if (mapInstance.getLayer('lines-hover')) {
-        mapInstance.setFilter('lines-hover', ['==', ['get', 'id'], segmentId]);
-        mapInstance.setPaintProperty('lines-hover', 'line-opacity', 0.6);
+      try {
+        const hoverLayer = mapInstance.getLayer('lines-hover');
+        if (hoverLayer && typeof mapInstance.setFilter === 'function' && typeof mapInstance.setPaintProperty === 'function') {
+          mapInstance.setFilter('lines-hover', ['==', ['get', 'id'], segmentId]);
+          mapInstance.setPaintProperty('lines-hover', 'line-opacity', 0.6);
+        }
+      } catch (error) {
+        console.warn('Error setting line hover effect:', error);
       }
     };
 
     const onLineMouseLeave = () => {
       console.log('Line mouse leave triggered');
       mapInstance.getCanvas().style.cursor = '';
-      if (mapInstance.getLayer('lines-hover')) {
-        mapInstance.setPaintProperty('lines-hover', 'line-opacity', 0);
-        mapInstance.setFilter('lines-hover', ['==', ['get', 'id'], '']);
+      
+      try {
+        const hoverLayer = mapInstance.getLayer('lines-hover');
+        if (hoverLayer && typeof mapInstance.setPaintProperty === 'function' && typeof mapInstance.setFilter === 'function') {
+          mapInstance.setPaintProperty('lines-hover', 'line-opacity', 0);
+          mapInstance.setFilter('lines-hover', ['==', ['get', 'id'], '']);
+        }
+      } catch (error) {
+        console.warn('Error removing line hover effect:', error);
       }
     };
 
@@ -488,8 +529,6 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       
       console.log('Points layer exists:', !!pointsLayer);
       console.log('Lines layer exists:', !!linesLayer);
-      console.log('Points data length:', pointsToUse?.length || 0);
-      console.log('Lines data length:', processedLines?.length || 0);
       
       if (pointsLayer) {
         mapInstance.on('mouseenter', 'points-layer', onPointMouseEnter);
@@ -510,32 +549,25 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
     } catch (error) {
       console.error('Error adding map event listeners:', error);
     }
-  }, [trailSegments, elevationLoading, pointsWithElevation, processedPoints, processedLines]);
+  }, []); // EMPTY DEPENDENCIES - make it stable
 
-  // Function to safely add sources and layers when map is ready
-  const addSourcesAndLayers = useCallback((mapInstance) => {
-    if (!mapInstance || !mapInstance.isStyleLoaded()) {
-      console.warn('Map style not loaded yet, skipping layer addition');
-      return;
-    }
-
-    console.log('Starting to add sources and layers...');
-    console.log('Processed points:', processedPoints.length);
-    console.log('Processed lines:', processedLines.length);
-    console.log('Points with elevation:', pointsWithElevation.length);
-
-    try {
-      const pointsToUse = pointsWithElevation.length > 0 ? pointsWithElevation : processedPoints;
-      console.log('Using points:', pointsToUse.length);
+  // Separate effect for updating elevation data only - SIMPLIFIED
+  useEffect(() => {
+    if (map && 
+        mapLoaded && 
+        pointsWithElevation.length > 0 && 
+        map.getSource &&
+        typeof map.getSource === 'function') {
       
-      // Add source for points
-      if (pointsToUse.length && !mapInstance.getSource('directus-points')) {
-        console.log('Adding points source and layer...');
-        mapInstance.addSource('directus-points', {
-          type: 'geojson',
-          data: {
+      try {
+        const pointsSource = map.getSource('directus-points');
+        
+        if (pointsSource && pointsSource.setData && typeof pointsSource.setData === 'function') {
+          console.log('Updating elevation data for existing points source');
+          
+          pointsSource.setData({
             type: 'FeatureCollection',
-            features: pointsToUse.map((point) => ({
+            features: pointsWithElevation.map((point) => ({
               type: 'Feature',
               geometry: {
                 type: 'Point',
@@ -548,116 +580,42 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                 elevationError: point.elevationError || false
               }
             }))
-          }
-        });
-
-        if (!mapInstance.getLayer('points-layer')) {
-          mapInstance.addLayer({
-            id: 'points-layer',
-            type: 'circle',
-            source: 'directus-points',
-            paint: {
-              'circle-radius': 8,
-              'circle-color': '#10b981',
-              'circle-stroke-width': 2,
-              'circle-stroke-color': '#ffffff'
-            }
           });
-          console.log('Points layer added successfully');
+          console.log('Elevation data updated successfully');
         }
-      } else {
-        console.log('No points to add or points source already exists');
+      } catch (error) {
+        console.error('Error updating elevation data:', error);
       }
-
-      // Add source for lines
-      if (processedLines.length && !mapInstance.getSource('directus-lines')) {
-        console.log('Adding lines source and layers...');
-        mapInstance.addSource('directus-lines', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: processedLines.map((line, index) => ({
-              type: 'Feature',
-              geometry: {
-                type: 'LineString',
-                coordinates: line.coordinates
-              },
-              properties: {
-                id: index,
-                name: line.name || `Jalur ${index + 1}`,
-                description: line.description || 'Tidak ada deskripsi',
-                distance: trailSegments.find(seg => seg.id === index)?.distance || 0
-              }
-            }))
-          }
-        });
-
-        if (!mapInstance.getLayer('lines-layer')) {
-          mapInstance.addLayer({
-            id: 'lines-layer',
-            type: 'line',
-            source: 'directus-lines',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round'
-            },
-            paint: {
-              'line-color': '#10b981',
-              'line-width': 4,
-              'line-opacity': 0.8
-            }
-          });
-          console.log('Lines layer added successfully');
-        }
-
-        if (!mapInstance.getLayer('lines-hover')) {
-          mapInstance.addLayer({
-            id: 'lines-hover',
-            type: 'line',
-            source: 'directus-lines',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round'
-            },
-            paint: {
-              'line-color': '#059669',
-              'line-width': 6,
-              'line-opacity': 0
-            },
-            filter: ['==', ['get', 'id'], '']
-          });
-          console.log('Lines hover layer added successfully');
-        }
-      } else {
-        console.log('No lines to add or lines source already exists');
-      }
-
-      console.log('Successfully added sources and layers');
-      
-      // Setup event listeners after layers are added with a longer delay
-      setTimeout(() => {
-        console.log('Setting up event listeners...');
-        setupMapEventListeners(mapInstance);
-      }, 500);
-      
-    } catch (error) {
-      console.error('Error adding sources and layers:', error);
     }
-  }, [processedPoints, processedLines, trailSegments, pointsWithElevation, setupMapEventListeners]);
+  }, [map, mapLoaded, pointsWithElevation]);
 
   // Add weather marker function
   const addWeatherMarker = useCallback((mapInstance) => {
-    if (!mapInstance || !weatherData || !weatherData.current || !mapInstance.isStyleLoaded()) return;
+    if (!mapInstance || 
+        !weatherData || 
+        !weatherData.current || 
+        !mapInstance.isStyleLoaded ||
+        !mapInstance.isStyleLoaded() ||
+        typeof mapInstance.getSource !== 'function' ||
+        typeof mapInstance.addSource !== 'function' ||
+        typeof mapInstance.addLayer !== 'function') {
+      console.warn('Cannot add weather marker - map or data not ready');
+      return;
+    }
     
     const coordinatesToUse = peakCoordinates || centerCoordinates;
 
     try {
       // Remove existing weather marker if it exists
-      if (mapInstance.getSource && mapInstance.getSource('weather-marker')) {
-        if (mapInstance.getLayer('weather-marker')) {
+      const existingWeatherSource = mapInstance.getSource('weather-marker');
+      if (existingWeatherSource) {
+        const existingWeatherLayer = mapInstance.getLayer('weather-marker');
+        if (existingWeatherLayer && typeof mapInstance.removeLayer === 'function') {
           mapInstance.removeLayer('weather-marker');
         }
-        mapInstance.removeSource('weather-marker');
+        if (typeof mapInstance.removeSource === 'function') {
+          mapInstance.removeSource('weather-marker');
+        }
       }
 
       mapInstance.addSource('weather-marker', {
@@ -696,15 +654,36 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
           'text-halo-width': 2
         }
       });
+      
+      console.log('Weather marker added successfully');
     } catch (error) {
       console.error('Error adding weather marker:', error);
     }
   }, [weatherData, centerCoordinates, peakCoordinates]);
 
   const toggle3D = () => {
-    if (map && mapLoaded) {
+    // Ultra defensive checks
+    if (!map || !mapLoaded) {
+      console.warn('Map not available for 3D toggle');
+      return;
+    }
+
+    if (!map.getSource || 
+        !map.addSource || 
+        !map.setTerrain || 
+        !map.setPitch ||
+        typeof map.getSource !== 'function' ||
+        typeof map.addSource !== 'function' ||
+        typeof map.setTerrain !== 'function' ||
+        typeof map.setPitch !== 'function') {
+      console.warn('Map methods not available for 3D toggle');
+      return;
+    }
+      
+    try {
       if (!is3D) {
-        if (!map.getSource('terrain')) {
+        const existingTerrain = map.getSource('terrain');
+        if (!existingTerrain) {
           map.addSource('terrain', {
             type: 'raster-dem',
             url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${key}`
@@ -713,62 +692,220 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
         map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
         map.setPitch(60);
       } else {
-        if (map.getSource('terrain')) {
+        const existingTerrain = map.getSource('terrain');
+        if (existingTerrain) {
           map.setTerrain(undefined);
           map.setPitch(0);
         }
       }
       setIs3D(!is3D);
+    } catch (error) {
+      console.error('Error toggling 3D:', error);
     }
   };
 
-  // Fixed changeMapStyle with proper style loading handling
+  // Fixed changeMapStyle with ultra defensive handling - SIMPLIFIED
   const changeMapStyle = useCallback((newStyle) => {
-    if (map && mapLoaded) {
+    // Ultra defensive checks
+    if (!map || !mapLoaded) {
+      console.warn('Map not available for style change');
+      setMapStyle(newStyle);
+      return;
+    }
+
+    if (!map.getCenter || 
+        !map.getZoom || 
+        !map.setStyle ||
+        typeof map.getCenter !== 'function' ||
+        typeof map.getZoom !== 'function' ||
+        typeof map.setStyle !== 'function') {
+      console.warn('Map methods not available for style change');
+      setMapStyle(newStyle);
+      return;
+    }
+      
+    console.log('Changing map style to:', newStyle);
+    
+    try {
       const currentCenter = map.getCenter();
       const currentZoom = map.getZoom();
-      const currentPitch = map.getPitch();
-      const currentBearing = map.getBearing();
+      const currentPitch = map.getPitch ? map.getPitch() : 0;
+      const currentBearing = map.getBearing ? map.getBearing() : 0;
       const current3D = is3D;
+
+      // Store current data before style change
+      const currentPoints = pointsWithElevation.length > 0 ? pointsWithElevation : processedPoints;
+      const currentLines = processedLines;
+      const currentTrailSegments = trailSegments;
 
       setMapLoaded(false); // Reset loaded state
 
       map.setStyle(`https://api.maptiler.com/maps/${newStyle}/style.json?key=${key}`);
       
       map.once('styledata', () => {
-        // Restore map position
-        map.setCenter(currentCenter);
-        map.setZoom(currentZoom);
-        map.setPitch(currentPitch);
-        map.setBearing(currentBearing);
-
-        // Re-add 3D terrain if it was enabled
-        if (current3D) {
-          if (!map.getSource('terrain')) {
-            map.addSource('terrain', {
-              type: 'raster-dem',
-              url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${key}`
-            });
+        console.log('Style loaded, restoring map state and features');
+        
+        try {
+          // Double check map is still available
+          if (!map || !map.setCenter) {
+            console.warn('Map no longer available after style change');
+            setMapLoaded(true);
+            return;
           }
-          map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
-        }
-        
-        // Re-add sources and layers (this will also setup event listeners)
-        addSourcesAndLayers(map);
-        
-        // Re-add weather marker
-        if (weatherData) {
-          addWeatherMarker(map);
-        }
 
-        setMapLoaded(true);
+          // Restore map position
+          map.setCenter(currentCenter);
+          map.setZoom(currentZoom);
+          if (map.setPitch) map.setPitch(currentPitch);
+          if (map.setBearing) map.setBearing(currentBearing);
+
+          // Re-add 3D terrain if it was enabled
+          if (current3D && map.addSource && map.setTerrain) {
+            const existingTerrain = map.getSource && map.getSource('terrain');
+            if (!existingTerrain) {
+              map.addSource('terrain', {
+                type: 'raster-dem',
+                url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${key}`
+              });
+            }
+            map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
+          }
+          
+          // Re-add sources and layers with stored data - INLINE IMPLEMENTATION
+          setTimeout(() => {
+            if (!map || !map.addSource || !map.addLayer || !map.isStyleLoaded()) {
+              console.warn('Map methods not available for feature restoration');
+              setMapLoaded(true);
+              return;
+            }
+
+            try {
+              console.log('Restoring features after style change...');
+              
+              // Add points
+              if (currentPoints.length > 0) {
+                map.addSource('directus-points', {
+                  type: 'geojson',
+                  data: {
+                    type: 'FeatureCollection',
+                    features: currentPoints.map((point) => ({
+                      type: 'Feature',
+                      geometry: {
+                        type: 'Point',
+                        coordinates: [parseFloat(point.longitude), parseFloat(point.latitude)]
+                      },
+                      properties: {
+                        name: point.name,
+                        description: point.description || 'No description available',
+                        elevation: point.elevation || null,
+                        elevationError: point.elevationError || false
+                      }
+                    }))
+                  }
+                });
+
+                map.addLayer({
+                  id: 'points-layer',
+                  type: 'circle',
+                  source: 'directus-points',
+                  paint: {
+                    'circle-radius': 8,
+                    'circle-color': '#10b981',
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
+                  }
+                });
+                console.log('Points restored after style change');
+              }
+
+              // Add lines
+              if (currentLines.length > 0) {
+                map.addSource('directus-lines', {
+                  type: 'geojson',
+                  data: {
+                    type: 'FeatureCollection',
+                    features: currentLines.map((line, index) => ({
+                      type: 'Feature',
+                      geometry: {
+                        type: 'LineString',
+                        coordinates: line.coordinates
+                      },
+                      properties: {
+                        id: index,
+                        name: line.name || `Jalur ${index + 1}`,
+                        description: line.description || 'Tidak ada deskripsi',
+                        distance: currentTrailSegments.find(seg => seg.id === index)?.distance || 0
+                      }
+                    }))
+                  }
+                });
+
+                map.addLayer({
+                  id: 'lines-layer',
+                  type: 'line',
+                  source: 'directus-lines',
+                  layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                  },
+                  paint: {
+                    'line-color': '#10b981',
+                    'line-width': 4,
+                    'line-opacity': 0.8
+                  }
+                });
+
+                map.addLayer({
+                  id: 'lines-hover',
+                  type: 'line',
+                  source: 'directus-lines',
+                  layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                  },
+                  paint: {
+                    'line-color': '#059669',
+                    'line-width': 6,
+                    'line-opacity': 0
+                  },
+                  filter: ['==', ['get', 'id'], '']
+                });
+                console.log('Lines restored after style change');
+              }
+
+              // Setup event listeners
+              setTimeout(() => {
+                if (map && map.getLayer) {
+                  setupMapEventListeners(map);
+                }
+              }, 200);
+
+              console.log('All features restored after style change');
+            } catch (error) {
+              console.error('Error restoring features after style change:', error);
+            }
+          }, 300);
+          
+          // Re-add weather marker
+          if (weatherData && map.addSource && map.addLayer) {
+            setTimeout(() => {
+              addWeatherMarker(map);
+            }, 500);
+          }
+
+          setMapLoaded(true);
+        } catch (error) {
+          console.error('Error in styledata callback:', error);
+          setMapLoaded(true); // Set loaded even if there's an error
+        }
       });
       
       setMapStyle(newStyle);
-    } else {
-      setMapStyle(newStyle);
+    } catch (error) {
+      console.error('Error changing map style:', error);
+      setMapLoaded(true);
     }
-  }, [map, mapLoaded, is3D, addSourcesAndLayers, key, weatherData, addWeatherMarker]);
+  }, [map, mapLoaded, is3D, key, weatherData, addWeatherMarker, pointsWithElevation, processedPoints, processedLines, trailSegments, setupMapEventListeners]);
 
   const toggleWeatherInfo = () => {
     setShowWeatherInfo(!showWeatherInfo);
@@ -825,33 +962,204 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
     };
   }, [centerCoordinates, key, fetchWeatherData, mapStyle]);
 
-  // Add layers when map is loaded and data is ready
+  // CONSOLIDATED SINGLE EFFECT FOR MAP SETUP - SIMPLIFIED APPROACH
   useEffect(() => {
-    if (map && mapLoaded && (processedPoints.length > 0 || processedLines.length > 0)) {
-      // Small delay to ensure style is fully loaded
-      const timeoutId = setTimeout(() => {
-        addSourcesAndLayers(map);
-      }, 100);
-
-      return () => clearTimeout(timeoutId);
+    console.log('=== MAP SETUP EFFECT TRIGGERED ===');
+    console.log('Map exists:', !!map);
+    console.log('Map loaded:', mapLoaded);
+    console.log('Processed points length:', processedPoints.length);
+    console.log('Processed lines length:', processedLines.length);
+    console.log('Points with elevation length:', pointsWithElevation.length);
+    
+    // Only proceed if we have map, it's loaded, and we have data
+    if (!map || !mapLoaded) {
+      console.log('Map not ready, skipping setup');
+      return;
     }
-  }, [map, mapLoaded, addSourcesAndLayers, processedPoints.length, processedLines.length]);
 
-  // Re-setup event listeners when elevation data changes
-  useEffect(() => {
-    if (map && mapLoaded && pointsWithElevation.length > 0) {
-      // Small delay to ensure layers are updated
-      const timeoutId = setTimeout(() => {
-        setupMapEventListeners(map);
-      }, 300);
-
-      return () => clearTimeout(timeoutId);
+    if (processedPoints.length === 0 && processedLines.length === 0) {
+      console.log('No data available, skipping setup');
+      return;
     }
-  }, [map, mapLoaded, pointsWithElevation.length, setupMapEventListeners]);
 
-  // Add weather marker when weather data changes
+    // Ultra defensive map method checks
+    if (!map.isStyleLoaded || 
+        !map.getSource || 
+        !map.getLayer || 
+        !map.addSource || 
+        !map.addLayer ||
+        typeof map.isStyleLoaded !== 'function' ||
+        typeof map.getSource !== 'function' ||
+        typeof map.getLayer !== 'function' ||
+        typeof map.addSource !== 'function' ||
+        typeof map.addLayer !== 'function') {
+      console.log('Map methods not available, skipping setup');
+      return;
+    }
+
+    // Check if style is loaded
+    if (!map.isStyleLoaded()) {
+      console.log('Style not loaded, skipping setup');
+      return;
+    }
+
+    // Check if sources already exist
+    try {
+      const pointsSourceExists = map.getSource('directus-points');
+      const linesSourceExists = map.getSource('directus-lines');
+      
+      if (pointsSourceExists || linesSourceExists) {
+        console.log('Sources already exist, just setting up event listeners');
+        setTimeout(() => {
+          if (map && map.getLayer) {
+            setupMapEventListeners(map);
+          }
+        }, 100);
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking existing sources:', error);
+      return;
+    }
+
+    console.log('Setting up map sources and layers...');
+    
+    // Add sources and layers
+    const setupMapFeatures = () => {
+      try {
+        // Double check everything is still available
+        if (!map || !map.addSource || !map.addLayer || !map.isStyleLoaded()) {
+          console.log('Map no longer available in setupMapFeatures');
+          return;
+        }
+
+        const currentPoints = pointsWithElevation.length > 0 ? pointsWithElevation : processedPoints;
+        console.log('Using points for setup:', currentPoints.length);
+        console.log('Using lines for setup:', processedLines.length);
+
+        // Add points source and layer
+        if (currentPoints.length > 0) {
+          console.log('Adding points source...');
+          map.addSource('directus-points', {
+            type: 'geojson',
+            data: {
+              type: 'FeatureCollection',
+              features: currentPoints.map((point) => ({
+                type: 'Feature',
+                geometry: {
+                  type: 'Point',
+                  coordinates: [parseFloat(point.longitude), parseFloat(point.latitude)]
+                },
+                properties: {
+                  name: point.name,
+                  description: point.description || 'No description available',
+                  elevation: point.elevation || null,
+                  elevationError: point.elevationError || false
+                }
+              }))
+            }
+          });
+
+          console.log('Adding points layer...');
+          map.addLayer({
+            id: 'points-layer',
+            type: 'circle',
+            source: 'directus-points',
+            paint: {
+              'circle-radius': 8,
+              'circle-color': '#10b981',
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#ffffff'
+            }
+          });
+          console.log('Points layer added successfully');
+        }
+
+        // Add lines source and layers
+        if (processedLines.length > 0) {
+          console.log('Adding lines source...');
+          map.addSource('directus-lines', {
+            type: 'geojson',
+            data: {
+              type: 'FeatureCollection',
+              features: processedLines.map((line, index) => ({
+                type: 'Feature',
+                geometry: {
+                  type: 'LineString',
+                  coordinates: line.coordinates
+                },
+                properties: {
+                  id: index,
+                  name: line.name || `Jalur ${index + 1}`,
+                  description: line.description || 'Tidak ada deskripsi',
+                  distance: trailSegments.find(seg => seg.id === index)?.distance || 0
+                }
+              }))
+            }
+          });
+
+          console.log('Adding lines layers...');
+          map.addLayer({
+            id: 'lines-layer',
+            type: 'line',
+            source: 'directus-lines',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#10b981',
+              'line-width': 4,
+              'line-opacity': 0.8
+            }
+          });
+
+          map.addLayer({
+            id: 'lines-hover',
+            type: 'line',
+            source: 'directus-lines',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#059669',
+              'line-width': 6,
+              'line-opacity': 0
+            },
+            filter: ['==', ['get', 'id'], '']
+          });
+          console.log('Lines layers added successfully');
+        }
+
+        // Setup event listeners after a delay
+        setTimeout(() => {
+          console.log('Setting up event listeners after layer creation...');
+          if (map && map.getLayer) {
+            setupMapEventListeners(map);
+          }
+        }, 300);
+
+        console.log('=== MAP SETUP COMPLETED ===');
+
+      } catch (error) {
+        console.error('Error in setupMapFeatures:', error);
+      }
+    };
+
+    // Add a small delay to ensure everything is ready
+    const timeoutId = setTimeout(setupMapFeatures, 200);
+    return () => clearTimeout(timeoutId);
+
+  }, [map, mapLoaded, processedPoints, processedLines, pointsWithElevation, trailSegments, setupMapEventListeners]);
+
+  // Add weather marker when weather data changes - WITH SAFETY CHECKS
   useEffect(() => {
-    if (map && mapLoaded && weatherData) {
+    if (map && 
+        mapLoaded && 
+        weatherData &&
+        typeof map.isStyleLoaded === 'function' &&
+        map.isStyleLoaded()) {
       addWeatherMarker(map);
     }
   }, [map, mapLoaded, weatherData, addWeatherMarker]);

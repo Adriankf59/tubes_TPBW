@@ -289,7 +289,7 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
   );
 };
 
-export default function Home({ mountains = [], totalCount = 0, error }) {
+export default function Home({ mountains = [], error }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProvince, setSelectedProvince] = useState("All");
   const [filteredMountains, setFilteredMountains] = useState([]);
@@ -299,7 +299,8 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
   const [isClient, setIsClient] = useState(false);
   const searchRef = useRef(null);
   
-  const itemsPerPage = 4;
+  // Increased items per page to better display all mountains
+  const itemsPerPage = 8;
   
   // Fix hydration by ensuring client-side only rendering
   useEffect(() => {
@@ -632,7 +633,7 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
             <h2 className="text-4xl font-bold text-gray-900 mb-2">
               Jalur Pendakian Gunung Populer di <span className="text-green-600">Indonesia</span>
             </h2>
-            <p className="text-gray-600 text-lg">Jelajahi {totalCount > 0 ? totalCount : safeMountains.length} gunung dengan jalur pendakian resmi di seluruh Nusantara</p>
+            <p className="text-gray-600 text-lg">Jelajahi semua {safeMountains.length} gunung dengan jalur pendakian resmi di seluruh Nusantara</p>
           </div>
           
           {/* SEO Content Section */}
@@ -657,7 +658,7 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
               >
                 {uniqueProvinces.map(province => (
                   <option key={province} value={province}>
-                    {province} {province === "All" ? `(${totalCount > 0 ? `${totalCount} total, menampilkan ${safeMountains.length}` : `${safeMountains.length} gunung`})` : `(${provinceCounts[province] || 0} gunung)`}
+                    {province} {province === "All" ? `(${safeMountains.length} gunung)` : `(${provinceCounts[province] || 0} gunung)`}
                   </option>
                 ))}
               </select>
@@ -690,6 +691,19 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
             )}
           </div>
           
+          {/* Mountains count info */}
+          <div className="mb-8">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-2xl">
+              <p className="text-green-800 text-sm">
+                <strong>Menampilkan semua {displayedMountains.length} gunung</strong>
+                {selectedProvince !== "All" && (
+                  <span> di {selectedProvince}</span>
+                )}
+                . Gunakan pencarian atau filter provinsi untuk menemukan gunung tertentu.
+              </p>
+            </div>
+          </div>
+          
           {error ? (
             <div className="text-center py-12">
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md mx-auto">
@@ -706,32 +720,17 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
               </div>
             </div>
           ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" role="list">
-                {currentMountains.map((mountain, index) => (
-                  <article key={mountain?.id || `mountain-${index}`} role="listitem">
-                    <TrailCard 
-                      mountain={mountain}
-                      index={index}
-                      availableMountains={safeMountains}
-                    />
-                  </article>
-                ))}
-              </div>
-              
-              {/* Show message about data limitation */}
-              {totalCount > safeMountains.length && (
-                <div className="mt-8 text-center">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl mx-auto">
-                    <p className="text-blue-800 text-sm">
-                      <strong>Menampilkan {safeMountains.length} dari {totalCount} gunung.</strong> 
-                      <br />
-                      Untuk performa optimal, kami membatasi tampilan data. Gunakan filter provinsi untuk melihat gunung spesifik.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" role="list">
+              {currentMountains.map((mountain, index) => (
+                <article key={mountain?.id || `mountain-${index}`} role="listitem">
+                  <TrailCard 
+                    mountain={mountain}
+                    index={index}
+                    availableMountains={safeMountains}
+                  />
+                </article>
+              ))}
+            </div>
           )}
           
           {/* Additional SEO Content */}
@@ -942,9 +941,10 @@ export default function Home({ mountains = [], totalCount = 0, error }) {
   );
 }
 
+// UPDATED: Remove the limit and show all mountains
 export async function getStaticProps() {
   try {
-    console.log('Fetching mountains data from API...');
+    console.log('Fetching ALL mountains data from API...');
     const res = await fetch("https://adrianfirmansyah-website.my.id/trailview/items/mountains");
     
     if (!res.ok) {
@@ -954,8 +954,8 @@ export async function getStaticProps() {
     const jsonData = await res.json();
     const fullMountains = Array.isArray(jsonData?.data) ? jsonData.data : [];
     
-    // Optimize data - only keep essential fields and limit to first 20 mountains
-    const mountains = fullMountains.slice(0, 20).map(mountain => ({
+    // REMOVED: .slice(0, 20) - Now we get ALL mountains
+    const mountains = fullMountains.map(mountain => ({
       id: mountain.id,
       name: mountain.name,
       kota: mountain.kota,
@@ -966,8 +966,7 @@ export async function getStaticProps() {
       image: mountain.image
     }));
     
-    console.log('Optimized mountains count:', mountains.length);
-    console.log('Total available mountains:', fullMountains.length);
+    console.log('All mountains loaded:', mountains.length);
     
     if (mountains.length > 0) {
       console.log('Sample mountain data:', mountains[0]);
@@ -975,8 +974,7 @@ export async function getStaticProps() {
 
     return {
       props: {
-        mountains,
-        totalCount: fullMountains.length, // Include total count for display
+        mountains, // Now contains ALL mountains, not just first 20
       },
       revalidate: 300, // Revalidate every 5 minutes
     };
@@ -986,7 +984,6 @@ export async function getStaticProps() {
     return {
       props: {
         mountains: [],
-        totalCount: 0,
         error: "Unable to fetch mountains data",
       },
       revalidate: 60, // Retry sooner if error
