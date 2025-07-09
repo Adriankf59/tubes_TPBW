@@ -51,7 +51,7 @@ const HikingIcon = () => (
 );
 
 const MapStyleIcon = () => (
-  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
   </svg>
 );
@@ -520,7 +520,6 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
     });
 
     newMap.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: true, showCompass: true }), 'top-right');
-    newMap.addControl(new maplibregl.ScaleControl({ maxWidth: 80, unit: 'metric' }), 'bottom-left');
     newMap.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showUserHeading: true }), 'bottom-right');
 
     newMap.on('load', () => {
@@ -909,10 +908,10 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                   <div className="map-container mb-6">
                     <div id="map" ref={mapContainerRef} className="map-container"></div>
                     
-                    <div className="absolute top-4 right-14 flex flex-col gap-2 z-10">
+                    <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
                       <button 
                         onClick={toggle3D} 
-                        className={`p-3 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 ${
+                        className={`p-2 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 ${
                           is3D ? 'bg-green-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                         }`}
                         title="Toggle 3D View"
@@ -922,7 +921,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
 
                       <button 
                         onClick={toggleWeatherBox} 
-                        className={`p-3 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 ${
+                        className={`p-2 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 ${
                           showWeatherInfo ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                         }`}
                         title="Weather Info"
@@ -931,7 +930,7 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                       </button>
 
                       {showWeatherInfo && (
-                        <div className="absolute top-0 right-16 bg-white rounded-lg shadow-xl p-4 w-80 animate-fade-in z-20">
+                        <div className="absolute top-0 left-16 bg-white rounded-lg shadow-xl p-4 w-80 animate-fade-in z-20">
                           <div className="flex justify-between items-center mb-3">
                             <h4 className="font-semibold text-gray-900">Cuaca di {mountain.kota}</h4>
                             <button 
@@ -1049,25 +1048,25 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                     <div className="absolute bottom-4 left-4 z-10">
                       <button
                         onClick={toggleStyleBox}
-                        className="p-3 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-300 hover:scale-105"
+                        className="p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-300 hover:scale-105"
                         title="Ubah Gaya Peta"
                       >
                         <MapStyleIcon />
                       </button>
                       
                       {showStyleBox && (
-                        <div className="absolute bottom-16 left-0 bg-white rounded-lg shadow-xl p-4 w-48 animate-fade-in">
-                          <div className="flex justify-between items-center mb-3">
-                            <h4 className="font-semibold text-gray-900">Gaya Peta</h4>
+                        <div className="absolute bottom-12 left-0 bg-white rounded-lg shadow-xl p-3 w-40 animate-fade-in">
+                          <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-semibold text-gray-900 text-sm">Gaya Peta</h4>
                             <button 
                               onClick={toggleStyleBox}
-                              className="text-gray-400 hover:text-gray-600"
+                              className="text-gray-400 hover:text-gray-600 text-sm"
                             >
                               ✕
                             </button>
                           </div>
                           
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             {[
                               { id: 'outdoor', name: 'Outdoor' },
                               { id: 'streets', name: 'Streets' },
@@ -1076,11 +1075,11 @@ export default function Mountain({ mountain, directusPoints, directusLines, cent
                               <button
                                 key={style.id}
                                 onClick={() => changeMapStyle(style.id)}
-                                className={`w-full flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 ${
+                                className={`w-full flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 ${
                                   mapStyle === style.id ? 'ring-2 ring-green-500 bg-green-50' : ''
                                 }`}
                               >
-                                <div className={`w-8 h-8 rounded border-2 ${
+                                <div className={`w-6 h-6 rounded border-2 ${
                                   mapStyle === style.id ? 'border-green-500' : 'border-gray-300'
                                 }`}>
                                   {mapStyle === style.id && (
