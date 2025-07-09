@@ -198,6 +198,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
   const mapContainerRef = useRef(null);
   const [is3D, setIs3D] = useState(false);
   const [map, setMap] = useState(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
   const [mapStyle, setMapStyle] = useState('outdoor');
   const [showStyleBox, setShowStyleBox] = useState(false);
   const [showWeatherBox, setShowWeatherBox] = useState(false);
@@ -384,267 +385,24 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
     }
   }, [peakCoordinates, fetchWeatherData]);
 
-  // Memoized addSourceAndLayers function
-  const addSourceAndLayers = useMemo(() => {
-    return (map) => {
-      const pointsToUse = pointsWithElevation.length > 0 ? pointsWithElevation : processedPoints;
-      
-      // Add source for points
-      if (pointsToUse.length && !map.getSource('directus-points')) {
-        map.addSource('directus-points', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: pointsToUse.map((point) => ({
-              type: 'Feature',
-              geometry: {
-                type: 'Point',
-                coordinates: [parseFloat(point.longitude), parseFloat(point.latitude)]
-              },
-              properties: {
-                name: point.name,
-                description: point.description || 'No description available',
-                elevation: point.elevation || null,
-                elevationError: point.elevationError || false
-              }
-            }))
-          }
-        });
+  // Function to setup map event listeners
+  const setupMapEventListeners = useCallback((mapInstance) => {
+    if (!mapInstance) return;
 
-        if (!map.getLayer('points-layer')) {
-          map.addLayer({
-            id: 'points-layer',
-            type: 'circle',
-            source: 'directus-points',
-            paint: {
-              'circle-radius': 8,
-              'circle-color': '#10b981',
-              'circle-stroke-width': 2,
-              'circle-stroke-color': '#ffffff'
-            }
-          });
-        }
-      }
-
-      // Add source for lines
-      if (processedLines.length && !map.getSource('directus-lines')) {
-        map.addSource('directus-lines', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: processedLines.map((line, index) => ({
-              type: 'Feature',
-              geometry: {
-                type: 'LineString',
-                coordinates: line.coordinates
-              },
-              properties: {
-                id: index,
-                name: line.name || `Jalur ${index + 1}`,
-                description: line.description || 'Tidak ada deskripsi',
-                distance: trailSegments.find(seg => seg.id === index)?.distance || 0
-              }
-            }))
-          }
-        });
-
-        if (!map.getLayer('lines-layer')) {
-          map.addLayer({
-            id: 'lines-layer',
-            type: 'line',
-            source: 'directus-lines',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round'
-            },
-            paint: {
-              'line-color': '#10b981',
-              'line-width': 4,
-              'line-opacity': 0.8
-            }
-          });
-        }
-
-        if (!map.getLayer('lines-hover')) {
-          map.addLayer({
-            id: 'lines-hover',
-            type: 'line',
-            source: 'directus-lines',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round'
-            },
-            paint: {
-              'line-color': '#059669',
-              'line-width': 6,
-              'line-opacity': 0
-            },
-            filter: ['==', ['get', 'id'], '']
-          });
-        }
-      }
-    };
-  }, [processedPoints, processedLines, trailSegments, pointsWithElevation]);
-
-  // Add weather marker function
-  const addWeatherMarker = useCallback(() => {
-    if (!map || !weatherData || !weatherData.current) return;
-    const coordinatesToUse = peakCoordinates || centerCoordinates;
-
-    try {
-      if (map.getSource && map.getSource('weather-marker')) {
-        if (map.getLayer('weather-marker')) {
-          map.removeLayer('weather-marker');
-        }
-        map.removeSource('weather-marker');
-      }
-
-      map.addSource('weather-marker', {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: coordinatesToUse
-            },
-            properties: {
-              weather: weatherData.current.weather[0].main,
-              temp: Math.round(weatherData.current.temp),
-              description: weatherData.current.weather[0].description
-            }
-          }]
-        }
-      });
-
-      map.addLayer({
-        id: 'weather-marker',
-        type: 'symbol',
-        source: 'weather-marker',
-        layout: {
-          'text-field': getWeatherEmoji(weatherData.current.weather[0].main) + '\n{temp}°C',
-          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-          'text-size': 20,
-          'text-anchor': 'bottom',
-          'text-offset': [0, -1]
-        },
-        paint: {
-          'text-color': '#ffffff',
-          'text-halo-color': '#000000',
-          'text-halo-width': 2
-        }
-      });
-    } catch (error) {
-      console.error('Error adding weather marker:', error);
-    }
-  }, [map, weatherData, centerCoordinates, peakCoordinates]);
-
-  const toggle3D = () => {
-    if (map) {
-      if (!is3D) {
-        if (!map.getSource('terrain')) {
-          map.addSource('terrain', {
-            type: 'raster-dem',
-            url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${key}`
-          });
-        }
-        map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
-        map.setPitch(60);
-      } else {
-        if (map.getSource('terrain')) {
-          map.setTerrain(undefined);
-          map.setPitch(0);
-        }
-      }
-      setIs3D(!is3D);
-    }
-  };
-
-  // Fixed changeMapStyle with proper dependencies
-  const changeMapStyle = useCallback((newStyle) => {
-    if (map) {
-      const currentCenter = map.getCenter();
-      const currentZoom = map.getZoom();
-      const currentPitch = map.getPitch();
-      const currentBearing = map.getBearing();
-
-      map.setStyle(`https://api.maptiler.com/maps/${newStyle}/style.json?key=${key}`);
-      map.once('styledata', () => {
-        map.setCenter(currentCenter);
-        map.setZoom(currentZoom);
-        map.setPitch(currentPitch);
-        map.setBearing(currentBearing);
-
-        if (is3D) {
-          if (!map.getSource('terrain')) {
-            map.addSource('terrain', {
-              type: 'raster-dem',
-              url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${key}`
-            });
-          }
-          map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
-        }
-        
-        addSourceAndLayers(map);
-        
-        if (weatherData) {
-          addWeatherMarker();
-        }
-      });
-      setMapStyle(newStyle);
-    } else {
-      setMapStyle(newStyle);
-    }
-  }, [map, is3D, addSourceAndLayers, key, weatherData, addWeatherMarker]);
-
-  const toggleWeatherInfo = () => {
-    setShowWeatherInfo(!showWeatherInfo);
-    if (!weatherData && !weatherLoading) {
-      fetchWeatherData();
-    }
-  };
-
-  // Map initialization - split into separate useEffect
-  useEffect(() => {
-    if (typeof window === 'undefined' || !mapContainerRef.current) return;
-
-    const newMap = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: `https://api.maptiler.com/maps/${mapStyle}/style.json?key=${key}`,
-      center: centerCoordinates,
-      zoom: 13,
-      maxPitch: 85
-    });
-
-    newMap.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: true, showCompass: true }), 'top-right');
-    newMap.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showUserHeading: true }), 'bottom-right');
-
-    newMap.on('load', () => {
-      fetchWeatherData();
-    });
-
-    setMap(newMap);
-
-    return () => newMap && newMap.remove();
-  }, [centerCoordinates, key, fetchWeatherData, mapStyle]);
-
-  // Add layers when map and data are ready
-  useEffect(() => {
-    if (map && (processedPoints.length > 0 || processedLines.length > 0)) {
-      addSourceAndLayers(map);
-    }
-  }, [map, addSourceAndLayers, processedPoints.length, processedLines.length]);
-
-  // Add map event listeners
-  useEffect(() => {
-    if (!map) return;
+    // Remove existing event listeners first
+    mapInstance.off('mouseenter', 'points-layer');
+    mapInstance.off('mouseleave', 'points-layer');
+    mapInstance.off('click', 'lines-layer');
+    mapInstance.off('mouseenter', 'lines-layer');
+    mapInstance.off('mouseleave', 'lines-layer');
 
     const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+    const pointsToUse = pointsWithElevation.length > 0 ? pointsWithElevation : processedPoints;
 
     // Point hover events
     const onPointMouseEnter = (e) => {
-      map.getCanvas().style.cursor = 'pointer';
+      console.log('Point mouse enter triggered');
+      mapInstance.getCanvas().style.cursor = 'pointer';
       const coordinates = e.features[0].geometry.coordinates.slice();
       const properties = e.features[0].properties;
       
@@ -658,16 +416,18 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       }
       
       const description = `<strong>${properties.name}</strong><br>${properties.description}<br>Koordinat: [${coordinates[0].toFixed(5)}, ${coordinates[1].toFixed(5)}]${elevationInfo}`;
-      popup.setLngLat(coordinates).setHTML(description).addTo(map);
+      popup.setLngLat(coordinates).setHTML(description).addTo(mapInstance);
     };
 
     const onPointMouseLeave = () => {
-      map.getCanvas().style.cursor = '';
+      console.log('Point mouse leave triggered');
+      mapInstance.getCanvas().style.cursor = '';
       popup.remove();
     };
 
     // Line click events
     const onLineClick = (e) => {
+      console.log('Line click triggered');
       const feature = e.features[0];
       const segmentId = feature.properties.id;
       const segment = trailSegments.find(seg => seg.id === segmentId);
@@ -696,50 +456,405 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
               </div>
             </div>
           `)
-          .addTo(map);
+          .addTo(mapInstance);
       }
     };
 
     // Line hover events
     const onLineMouseEnter = (e) => {
-      map.getCanvas().style.cursor = 'pointer';
+      console.log('Line mouse enter triggered');
+      mapInstance.getCanvas().style.cursor = 'pointer';
       const segmentId = e.features[0].properties.id;
       
-      map.setFilter('lines-hover', ['==', ['get', 'id'], segmentId]);
-      map.setPaintProperty('lines-hover', 'line-opacity', 0.6);
+      if (mapInstance.getLayer('lines-hover')) {
+        mapInstance.setFilter('lines-hover', ['==', ['get', 'id'], segmentId]);
+        mapInstance.setPaintProperty('lines-hover', 'line-opacity', 0.6);
+      }
     };
 
     const onLineMouseLeave = () => {
-      map.getCanvas().style.cursor = '';
-      map.setPaintProperty('lines-hover', 'line-opacity', 0);
-      map.setFilter('lines-hover', ['==', ['get', 'id'], '']);
-    };
-
-    // Add event listeners
-    map.on('mouseenter', 'points-layer', onPointMouseEnter);
-    map.on('mouseleave', 'points-layer', onPointMouseLeave);
-    map.on('click', 'lines-layer', onLineClick);
-    map.on('mouseenter', 'lines-layer', onLineMouseEnter);
-    map.on('mouseleave', 'lines-layer', onLineMouseLeave);
-
-    // Cleanup function
-    return () => {
-      if (map) {
-        map.off('mouseenter', 'points-layer', onPointMouseEnter);
-        map.off('mouseleave', 'points-layer', onPointMouseLeave);
-        map.off('click', 'lines-layer', onLineClick);
-        map.off('mouseenter', 'lines-layer', onLineMouseEnter);
-        map.off('mouseleave', 'lines-layer', onLineMouseLeave);
+      console.log('Line mouse leave triggered');
+      mapInstance.getCanvas().style.cursor = '';
+      if (mapInstance.getLayer('lines-hover')) {
+        mapInstance.setPaintProperty('lines-hover', 'line-opacity', 0);
+        mapInstance.setFilter('lines-hover', ['==', ['get', 'id'], '']);
       }
     };
-  }, [map, trailSegments, elevationLoading]);
+
+    // Add event listeners with error handling
+    try {
+      const pointsLayer = mapInstance.getLayer('points-layer');
+      const linesLayer = mapInstance.getLayer('lines-layer');
+      
+      console.log('Points layer exists:', !!pointsLayer);
+      console.log('Lines layer exists:', !!linesLayer);
+      console.log('Points data length:', pointsToUse?.length || 0);
+      console.log('Lines data length:', processedLines?.length || 0);
+      
+      if (pointsLayer) {
+        mapInstance.on('mouseenter', 'points-layer', onPointMouseEnter);
+        mapInstance.on('mouseleave', 'points-layer', onPointMouseLeave);
+        console.log('Point event listeners added successfully');
+      } else {
+        console.log('Points layer not found, skipping point event listeners');
+      }
+      
+      if (linesLayer) {
+        mapInstance.on('click', 'lines-layer', onLineClick);
+        mapInstance.on('mouseenter', 'lines-layer', onLineMouseEnter);
+        mapInstance.on('mouseleave', 'lines-layer', onLineMouseLeave);
+        console.log('Line event listeners added successfully');
+      } else {
+        console.log('Lines layer not found, skipping line event listeners');
+      }
+    } catch (error) {
+      console.error('Error adding map event listeners:', error);
+    }
+  }, [trailSegments, elevationLoading, pointsWithElevation, processedPoints, processedLines]);
+
+  // Function to safely add sources and layers when map is ready
+  const addSourcesAndLayers = useCallback((mapInstance) => {
+    if (!mapInstance || !mapInstance.isStyleLoaded()) {
+      console.warn('Map style not loaded yet, skipping layer addition');
+      return;
+    }
+
+    console.log('Starting to add sources and layers...');
+    console.log('Processed points:', processedPoints.length);
+    console.log('Processed lines:', processedLines.length);
+    console.log('Points with elevation:', pointsWithElevation.length);
+
+    try {
+      const pointsToUse = pointsWithElevation.length > 0 ? pointsWithElevation : processedPoints;
+      console.log('Using points:', pointsToUse.length);
+      
+      // Add source for points
+      if (pointsToUse.length && !mapInstance.getSource('directus-points')) {
+        console.log('Adding points source and layer...');
+        mapInstance.addSource('directus-points', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: pointsToUse.map((point) => ({
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [parseFloat(point.longitude), parseFloat(point.latitude)]
+              },
+              properties: {
+                name: point.name,
+                description: point.description || 'No description available',
+                elevation: point.elevation || null,
+                elevationError: point.elevationError || false
+              }
+            }))
+          }
+        });
+
+        if (!mapInstance.getLayer('points-layer')) {
+          mapInstance.addLayer({
+            id: 'points-layer',
+            type: 'circle',
+            source: 'directus-points',
+            paint: {
+              'circle-radius': 8,
+              'circle-color': '#10b981',
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#ffffff'
+            }
+          });
+          console.log('Points layer added successfully');
+        }
+      } else {
+        console.log('No points to add or points source already exists');
+      }
+
+      // Add source for lines
+      if (processedLines.length && !mapInstance.getSource('directus-lines')) {
+        console.log('Adding lines source and layers...');
+        mapInstance.addSource('directus-lines', {
+          type: 'geojson',
+          data: {
+            type: 'FeatureCollection',
+            features: processedLines.map((line, index) => ({
+              type: 'Feature',
+              geometry: {
+                type: 'LineString',
+                coordinates: line.coordinates
+              },
+              properties: {
+                id: index,
+                name: line.name || `Jalur ${index + 1}`,
+                description: line.description || 'Tidak ada deskripsi',
+                distance: trailSegments.find(seg => seg.id === index)?.distance || 0
+              }
+            }))
+          }
+        });
+
+        if (!mapInstance.getLayer('lines-layer')) {
+          mapInstance.addLayer({
+            id: 'lines-layer',
+            type: 'line',
+            source: 'directus-lines',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#10b981',
+              'line-width': 4,
+              'line-opacity': 0.8
+            }
+          });
+          console.log('Lines layer added successfully');
+        }
+
+        if (!mapInstance.getLayer('lines-hover')) {
+          mapInstance.addLayer({
+            id: 'lines-hover',
+            type: 'line',
+            source: 'directus-lines',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#059669',
+              'line-width': 6,
+              'line-opacity': 0
+            },
+            filter: ['==', ['get', 'id'], '']
+          });
+          console.log('Lines hover layer added successfully');
+        }
+      } else {
+        console.log('No lines to add or lines source already exists');
+      }
+
+      console.log('Successfully added sources and layers');
+      
+      // Setup event listeners after layers are added with a longer delay
+      setTimeout(() => {
+        console.log('Setting up event listeners...');
+        setupMapEventListeners(mapInstance);
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error adding sources and layers:', error);
+    }
+  }, [processedPoints, processedLines, trailSegments, pointsWithElevation, setupMapEventListeners]);
+
+  // Add weather marker function
+  const addWeatherMarker = useCallback((mapInstance) => {
+    if (!mapInstance || !weatherData || !weatherData.current || !mapInstance.isStyleLoaded()) return;
+    
+    const coordinatesToUse = peakCoordinates || centerCoordinates;
+
+    try {
+      // Remove existing weather marker if it exists
+      if (mapInstance.getSource && mapInstance.getSource('weather-marker')) {
+        if (mapInstance.getLayer('weather-marker')) {
+          mapInstance.removeLayer('weather-marker');
+        }
+        mapInstance.removeSource('weather-marker');
+      }
+
+      mapInstance.addSource('weather-marker', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: coordinatesToUse
+            },
+            properties: {
+              weather: weatherData.current.weather[0].main,
+              temp: Math.round(weatherData.current.temp),
+              description: weatherData.current.weather[0].description
+            }
+          }]
+        }
+      });
+
+      mapInstance.addLayer({
+        id: 'weather-marker',
+        type: 'symbol',
+        source: 'weather-marker',
+        layout: {
+          'text-field': getWeatherEmoji(weatherData.current.weather[0].main) + '\n{temp}°C',
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-size': 20,
+          'text-anchor': 'bottom',
+          'text-offset': [0, -1]
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': '#000000',
+          'text-halo-width': 2
+        }
+      });
+    } catch (error) {
+      console.error('Error adding weather marker:', error);
+    }
+  }, [weatherData, centerCoordinates, peakCoordinates]);
+
+  const toggle3D = () => {
+    if (map && mapLoaded) {
+      if (!is3D) {
+        if (!map.getSource('terrain')) {
+          map.addSource('terrain', {
+            type: 'raster-dem',
+            url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${key}`
+          });
+        }
+        map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
+        map.setPitch(60);
+      } else {
+        if (map.getSource('terrain')) {
+          map.setTerrain(undefined);
+          map.setPitch(0);
+        }
+      }
+      setIs3D(!is3D);
+    }
+  };
+
+  // Fixed changeMapStyle with proper style loading handling
+  const changeMapStyle = useCallback((newStyle) => {
+    if (map && mapLoaded) {
+      const currentCenter = map.getCenter();
+      const currentZoom = map.getZoom();
+      const currentPitch = map.getPitch();
+      const currentBearing = map.getBearing();
+      const current3D = is3D;
+
+      setMapLoaded(false); // Reset loaded state
+
+      map.setStyle(`https://api.maptiler.com/maps/${newStyle}/style.json?key=${key}`);
+      
+      map.once('styledata', () => {
+        // Restore map position
+        map.setCenter(currentCenter);
+        map.setZoom(currentZoom);
+        map.setPitch(currentPitch);
+        map.setBearing(currentBearing);
+
+        // Re-add 3D terrain if it was enabled
+        if (current3D) {
+          if (!map.getSource('terrain')) {
+            map.addSource('terrain', {
+              type: 'raster-dem',
+              url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${key}`
+            });
+          }
+          map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
+        }
+        
+        // Re-add sources and layers (this will also setup event listeners)
+        addSourcesAndLayers(map);
+        
+        // Re-add weather marker
+        if (weatherData) {
+          addWeatherMarker(map);
+        }
+
+        setMapLoaded(true);
+      });
+      
+      setMapStyle(newStyle);
+    } else {
+      setMapStyle(newStyle);
+    }
+  }, [map, mapLoaded, is3D, addSourcesAndLayers, key, weatherData, addWeatherMarker]);
+
+  const toggleWeatherInfo = () => {
+    setShowWeatherInfo(!showWeatherInfo);
+    if (!weatherData && !weatherLoading) {
+      fetchWeatherData();
+    }
+  };
+
+  // Map initialization
+  useEffect(() => {
+    if (typeof window === 'undefined' || !mapContainerRef.current) return;
+
+    const newMap = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: `https://api.maptiler.com/maps/${mapStyle}/style.json?key=${key}`,
+      center: centerCoordinates,
+      zoom: 13,
+      maxPitch: 85
+    });
+
+    newMap.addControl(new maplibregl.NavigationControl({ 
+      visualizePitch: true, 
+      showZoom: true, 
+      showCompass: true 
+    }), 'top-right');
+    
+    newMap.addControl(new maplibregl.GeolocateControl({ 
+      positionOptions: { enableHighAccuracy: true }, 
+      trackUserLocation: true, 
+      showUserHeading: true 
+    }), 'bottom-right');
+
+    // Handle map load event
+    newMap.on('load', () => {
+      console.log('Map loaded');
+      setMapLoaded(true);
+      fetchWeatherData();
+    });
+
+    // Handle style load event
+    newMap.on('styledata', () => {
+      if (newMap.isStyleLoaded()) {
+        console.log('Style loaded');
+        setMapLoaded(true);
+      }
+    });
+
+    setMap(newMap);
+
+    return () => {
+      if (newMap) {
+        newMap.remove();
+      }
+    };
+  }, [centerCoordinates, key, fetchWeatherData, mapStyle]);
+
+  // Add layers when map is loaded and data is ready
+  useEffect(() => {
+    if (map && mapLoaded && (processedPoints.length > 0 || processedLines.length > 0)) {
+      // Small delay to ensure style is fully loaded
+      const timeoutId = setTimeout(() => {
+        addSourcesAndLayers(map);
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [map, mapLoaded, addSourcesAndLayers, processedPoints.length, processedLines.length]);
+
+  // Re-setup event listeners when elevation data changes
+  useEffect(() => {
+    if (map && mapLoaded && pointsWithElevation.length > 0) {
+      // Small delay to ensure layers are updated
+      const timeoutId = setTimeout(() => {
+        setupMapEventListeners(map);
+      }, 300);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [map, mapLoaded, pointsWithElevation.length, setupMapEventListeners]);
 
   // Add weather marker when weather data changes
   useEffect(() => {
-    if (map && weatherData) {
-      addWeatherMarker();
+    if (map && mapLoaded && weatherData) {
+      addWeatherMarker(map);
     }
-  }, [map, weatherData, addWeatherMarker]);
+  }, [map, mapLoaded, weatherData, addWeatherMarker]);
   
   const toggleStyleBox = () => {
     setShowStyleBox(!showStyleBox);
@@ -1034,11 +1149,22 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                   <div className="map-container mb-6">
                     <div id="map" ref={mapContainerRef} className="map-container"></div>
                     
+                    {/* Map Loading Indicator */}
+                    {!mapLoaded && (
+                      <div className="absolute inset-0 bg-gray-100 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+                          <div className="text-gray-600">Memuat peta...</div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Map Controls */}
                     <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
                       <button 
                         onClick={toggle3D} 
-                        className={`p-2 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 ${
+                        disabled={!mapLoaded}
+                        className={`p-2 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
                           is3D ? 'bg-green-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                         }`}
                         title="Toggle 3D View"
@@ -1160,7 +1286,8 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                     <div className="absolute bottom-4 left-4 z-10">
                       <button
                         onClick={toggleStyleBox}
-                        className="p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-300 hover:scale-105"
+                        disabled={!mapLoaded}
+                        className="p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Ubah Gaya Peta"
                       >
                         <MapStyleIcon />
@@ -1187,7 +1314,8 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                               <button
                                 key={style.id}
                                 onClick={() => changeMapStyle(style.id)}
-                                className={`w-full flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 ${
+                                disabled={!mapLoaded}
+                                className={`w-full flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                                   mapStyle === style.id ? 'ring-2 ring-green-500 bg-green-50' : ''
                                 }`}
                               >
