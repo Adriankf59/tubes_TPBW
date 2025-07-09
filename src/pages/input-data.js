@@ -1,8 +1,7 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useState, useRef } from "react";
-// Temporarily remove jszip and use direct KML parsing
-// import JSZip from "jszip";
+import JSZip from "jszip";
 import { kml } from "@tmcw/togeojson";
 
 // Icon Components (reusing from index.js)
@@ -67,6 +66,132 @@ const safeNumber = (value, defaultValue = 0) => {
   return defaultValue;
 };
 
+// Function to extract and parse KML from KMZ
+async function extractKMLFromKMZ(file) {
+  try {
+    const zip = await JSZip.loadAsync(file);
+    
+    // Find the KML file in the ZIP
+    let kmlFile = null;
+    let kmlContent = null;
+    
+    // Iterate through files to find .kml file
+    const fileNames = Object.keys(zip.files);
+    for (const fileName of fileNames) {
+      if (fileName.toLowerCase().endsWith('.kml')) {
+        kmlFile = zip.files[fileName];
+        break;
+      }
+    }
+    
+    if (!kmlFile) {
+      throw new Error("Tidak ditemukan file KML dalam file KMZ");
+    }
+    
+    // Extract KML content
+    kmlContent = await kmlFile.async('string');
+    return kmlContent;
+  } catch (error) {
+    console.error("Error extracting KML from KMZ:", error);
+    throw new Error("Gagal membaca file KMZ: " + error.message);
+  }
+}
+
+// Function to parse KML content to extract points and tracks
+function parseKMLToData(kmlDoc) {
+  let points = [];
+  let tracks = [];
+  
+  try {
+    // Try using togeojson first
+    const geojson = kml(kmlDoc);
+    
+    if (!geojson || !geojson.features) {
+      throw new Error("Tidak dapat mengkonversi KML ke GeoJSON");
+    }
+
+    // Separate points and linestrings
+    geojson.features.forEach(feature => {
+      if (!feature.geometry) return;
+      
+      if (feature.geometry.type === "Point") {
+        points.push({
+          name: safeText(feature.properties?.name || "Unnamed Point"),
+          description: safeText(feature.properties?.description || ""),
+          coordinates: feature.geometry.coordinates.map(coord => safeNumber(coord))
+        });
+      } else if (feature.geometry.type === "LineString") {
+        tracks.push({
+          name: safeText(feature.properties?.name || "Unnamed Track"),
+          description: safeText(feature.properties?.description || ""),
+          coordinates: feature.geometry.coordinates.map(coord => coord.map(c => safeNumber(c)))
+        });
+      } else if (feature.geometry.type === "MultiLineString") {
+        // Handle MultiLineString by converting to multiple LineStrings
+        feature.geometry.coordinates.forEach((coords, idx) => {
+          tracks.push({
+            name: safeText((feature.properties?.name || "Unnamed Track") + (idx > 0 ? ` (${idx + 1})` : "")),
+            description: safeText(feature.properties?.description || ""),
+            coordinates: coords.map(coord => coord.map(c => safeNumber(c)))
+          });
+        });
+      }
+    });
+  } catch (togeojsonError) {
+    console.warn("togeojson parsing failed, trying manual parsing:", togeojsonError);
+    
+    // Fallback to manual parsing
+    const placemarks = kmlDoc.getElementsByTagName("Placemark");
+    
+    for (let i = 0; i < placemarks.length; i++) {
+      const placemark = placemarks[i];
+      const nameEl = placemark.getElementsByTagName("name")[0];
+      const descEl = placemark.getElementsByTagName("description")[0];
+      const name = safeText(nameEl?.textContent || "Unnamed");
+      const description = safeText(descEl?.textContent || "");
+      
+      // Check for Point
+      const pointElements = placemark.getElementsByTagName("Point");
+      if (pointElements.length > 0) {
+        const coordsEl = pointElements[0].getElementsByTagName("coordinates")[0];
+        if (coordsEl) {
+          const coordsText = safeText(coordsEl.textContent);
+          const coordinates = coordsText.trim().split(",").map(c => safeNumber(c));
+          if (coordinates.length >= 2) {
+            points.push({
+              name,
+              description,
+              coordinates: [coordinates[0], coordinates[1], coordinates[2] || 0]
+            });
+          }
+        }
+      }
+      
+      // Check for LineString
+      const lineStringElements = placemark.getElementsByTagName("LineString");
+      if (lineStringElements.length > 0) {
+        const coordsEl = lineStringElements[0].getElementsByTagName("coordinates")[0];
+        if (coordsEl) {
+          const coordsText = safeText(coordsEl.textContent);
+          const coordsArray = coordsText.trim().split(/\s+/).filter(c => c).map(coord => {
+            const parts = coord.split(",").map(c => safeNumber(c));
+            return [parts[0], parts[1], parts[2] || 0];
+          });
+          if (coordsArray.length > 0) {
+            tracks.push({
+              name,
+              description,
+              coordinates: coordsArray
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  return { points, tracks };
+}
+
 export default function InputData() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -99,19 +224,13 @@ export default function InputData() {
       let kmlContent = null;
       
       if (fileName.endsWith('.kmz')) {
-        // For now, show message to extract KMZ manually
-        setUploadStatus({ 
-          type: "error", 
-          message: "File KMZ terdeteksi. Untuk sementara, silakan ekstrak file KMZ terlebih dahulu (rename ke .zip dan ekstrak), kemudian upload file .kml yang ada di dalamnya. Kami sedang memperbaiki fitur upload KMZ langsung." 
-        });
-        setUploading(false);
-        return;
+        setUploadStatus({ type: "info", message: "Membaca file KMZ..." });
+        kmlContent = await extractKMLFromKMZ(file);
       } else if (fileName.endsWith('.kml')) {
         setUploadStatus({ type: "info", message: "Membaca file KML..." });
-        // Read KML file directly
         kmlContent = await file.text();
       } else {
-        throw new Error("Format file tidak didukung. Gunakan file .kml");
+        throw new Error("Format file tidak didukung. Gunakan file .kml atau .kmz");
       }
 
       setUploadStatus({ type: "info", message: "Mengkonversi KML ke GeoJSON..." });
@@ -126,96 +245,8 @@ export default function InputData() {
         throw new Error("Format KML tidak valid. Pastikan file KML dalam format yang benar.");
       }
 
-      // Try using togeojson first
-      let points = [];
-      let tracks = [];
-      
-      try {
-        // Convert KML to GeoJSON using togeojson
-        const geojson = kml(kmlDoc);
-        
-        if (!geojson || !geojson.features) {
-          throw new Error("Tidak dapat mengkonversi KML ke GeoJSON");
-        }
-
-        // Separate points and linestrings
-        geojson.features.forEach(feature => {
-          if (!feature.geometry) return;
-          
-          if (feature.geometry.type === "Point") {
-            points.push({
-              name: safeText(feature.properties?.name || "Unnamed Point"),
-              description: safeText(feature.properties?.description || ""),
-              coordinates: feature.geometry.coordinates.map(coord => safeNumber(coord))
-            });
-          } else if (feature.geometry.type === "LineString") {
-            tracks.push({
-              name: safeText(feature.properties?.name || "Unnamed Track"),
-              description: safeText(feature.properties?.description || ""),
-              coordinates: feature.geometry.coordinates.map(coord => coord.map(c => safeNumber(c)))
-            });
-          } else if (feature.geometry.type === "MultiLineString") {
-            // Handle MultiLineString by converting to multiple LineStrings
-            feature.geometry.coordinates.forEach((coords, idx) => {
-              tracks.push({
-                name: safeText((feature.properties?.name || "Unnamed Track") + (idx > 0 ? ` (${idx + 1})` : "")),
-                description: safeText(feature.properties?.description || ""),
-                coordinates: coords.map(coord => coord.map(c => safeNumber(c)))
-              });
-            });
-          }
-        });
-      } catch (togeojsonError) {
-        console.warn("togeojson parsing failed, trying manual parsing:", togeojsonError);
-        
-        // Fallback to manual parsing
-        const placemarks = kmlDoc.getElementsByTagName("Placemark");
-        
-        for (let i = 0; i < placemarks.length; i++) {
-          const placemark = placemarks[i];
-          const nameEl = placemark.getElementsByTagName("name")[0];
-          const descEl = placemark.getElementsByTagName("description")[0];
-          const name = safeText(nameEl?.textContent || "Unnamed");
-          const description = safeText(descEl?.textContent || "");
-          
-          // Check for Point
-          const pointElements = placemark.getElementsByTagName("Point");
-          if (pointElements.length > 0) {
-            const coordsEl = pointElements[0].getElementsByTagName("coordinates")[0];
-            if (coordsEl) {
-              const coordsText = safeText(coordsEl.textContent);
-              const coordinates = coordsText.trim().split(",").map(c => safeNumber(c));
-              if (coordinates.length >= 2) {
-                points.push({
-                  name,
-                  description,
-                  coordinates: [coordinates[0], coordinates[1], coordinates[2] || 0]
-                });
-              }
-            }
-          }
-          
-          // Check for LineString
-          const lineStringElements = placemark.getElementsByTagName("LineString");
-          if (lineStringElements.length > 0) {
-            const coordsEl = lineStringElements[0].getElementsByTagName("coordinates")[0];
-            if (coordsEl) {
-              const coordsText = safeText(coordsEl.textContent);
-              const coordsArray = coordsText.trim().split(/\s+/).filter(c => c).map(coord => {
-                const parts = coord.split(",").map(c => safeNumber(c));
-                return [parts[0], parts[1], parts[2] || 0];
-              });
-              if (coordsArray.length > 0) {
-                tracks.push({
-                  name,
-                  description,
-                  coordinates: coordsArray
-                });
-              }
-            }
-          }
-        }
-      }
+      // Parse KML to extract points and tracks
+      const { points, tracks } = parseKMLToData(kmlDoc);
 
       if (points.length === 0 && tracks.length === 0) {
         throw new Error("File tidak berisi data Point atau LineString yang valid.");
@@ -328,7 +359,7 @@ export default function InputData() {
               Upload Data Jalur Pendakian
             </h1>
             <p className="text-gray-600 mb-8">
-              Unggah file KMZ yang berisi data titik lokasi dan jalur pendakian gunung
+              Unggah file KMZ atau KML yang berisi data titik lokasi dan jalur pendakian gunung
             </p>
 
             {/* Upload Area */}
@@ -458,7 +489,7 @@ export default function InputData() {
           <div className="mt-8 bg-blue-50 rounded-xl p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-3">Petunjuk Penggunaan</h2>
             <ol className="list-decimal list-inside space-y-2 text-gray-700">
-              <li>Siapkan file KML yang berisi data jalur pendakian gunung</li>
+              <li>Siapkan file KML atau KMZ yang berisi data jalur pendakian gunung</li>
               <li>File harus mengandung data Point (titik lokasi) dan/atau LineString (jalur)</li>
               <li>Klik area upload atau drag file ke area tersebut</li>
               <li>Sistem akan otomatis mem-parse file dan menampilkan preview data</li>
@@ -475,25 +506,21 @@ export default function InputData() {
               <h3 className="font-semibold text-blue-800 mb-2">💡 Contoh Penamaan Tabel:</h3>
               <div className="text-sm text-blue-700 space-y-1">
                 <p><strong>File:</strong> &ldquo;gunung_bromo.kml&rdquo; → <strong>Tabel:</strong> point_gunung_bromo &amp; jalur_gunung_bromo</p>
-                <p><strong>File:</strong> &ldquo;Jalur Merapi 2024.kml&rdquo; → <strong>Tabel:</strong> point_jalur_merapi_2024 &amp; jalur_jalur_merapi_2024</p>
+                <p><strong>File:</strong> &ldquo;Jalur Merapi 2024.kmz&rdquo; → <strong>Tabel:</strong> point_jalur_merapi_2024 &amp; jalur_jalur_merapi_2024</p>
                 <p className="mt-2 text-xs">
                   <em>Catatan: Karakter khusus akan diganti dengan underscore (_) dan nama akan diubah ke huruf kecil</em>
                 </p>
               </div>
             </div>
             
-            <div className="mt-4 p-4 bg-yellow-100 rounded-lg border border-yellow-300">
-              <h3 className="font-semibold text-yellow-800 mb-2">📌 Catatan untuk file KMZ:</h3>
-              <p className="text-sm text-yellow-700">
-                Jika Anda memiliki file KMZ, silakan ekstrak terlebih dahulu:
-              </p>
-              <ol className="list-decimal list-inside text-sm text-yellow-700 mt-2 ml-4">
-                <li>Rename file .kmz menjadi .zip</li>
-                <li>Ekstrak file zip tersebut</li>
-                <li>Upload file .kml yang ada di dalamnya</li>
-              </ol>
-              <p className="text-sm text-yellow-700 mt-2">
-                Kami sedang memperbaiki fitur upload KMZ langsung.
+            <div className="mt-4 p-4 bg-green-100 rounded-lg border border-green-300">
+              <h3 className="font-semibold text-green-800 mb-2">✅ Dukungan Format File:</h3>
+              <ul className="list-disc list-inside text-sm text-green-700 ml-4">
+                <li><strong>KML</strong> - File akan langsung dibaca dan diparse</li>
+                <li><strong>KMZ</strong> - File akan diekstrak otomatis dan KML di dalamnya akan dibaca</li>
+              </ul>
+              <p className="text-sm text-green-700 mt-2">
+                Kedua format file sekarang didukung sepenuhnya!
               </p>
             </div>
           </div>

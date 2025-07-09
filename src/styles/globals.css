@@ -7,3 +7,18 @@ body {
   @apply bg-custom-bg; /* Menggunakan kelas warna latar yang baru ditambahkan */
 }
 
+/* Elevation Profile Styling */
+#profileContainer {
+  position: relative;
+}
+
+.elevation-profile-container {
+  background: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.elevation-profile-container .elevation-profile {
+  border-radius: 8px;
+}
+

@@ -64,65 +64,55 @@ const ElevationIcon = () => (
   </svg>
 );
 
-// External proxy service untuk bypass CORS (reliable solution)
+// Image URL helper functions
 const buildImageUrlViaProxy = (imageId) => {
+  if (!imageId) return null;
   const originalUrl = `https://adrianfirmansyah-website.my.id/trailview/assets/${imageId}`;
-  
-  // Option 1: images.weserv.nl (reliable image proxy)
+  // Use a more reliable proxy service
   return `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&w=400&h=300&fit=cover&output=webp&q=80`;
 };
 
-// Simple function to build image URL through external proxy
-const buildImageUrl = (imageId) => {
-  // Use external proxy as primary method
-  return buildImageUrlViaProxy(imageId);
-};
-
-// Fallback function for direct URL (for error handling)
 const buildDirectImageUrl = (imageId) => {
+  if (!imageId) return null;
   return `https://adrianfirmansyah-website.my.id/trailview/assets/${imageId}`;
 };
 
-// Enhanced function with debugging
-const buildImageUrlWithDebug = (imageId) => {
-  const url = buildImageUrlViaProxy(imageId);
-  console.log('Building image URL via external proxy:', url);
-  return url;
+const buildImageUrl = (imageId) => {
+  // Try direct URL first, then fallback to proxy
+  return buildDirectImageUrl(imageId) || buildImageUrlViaProxy(imageId);
 };
 
 // SVG placeholder as base64
 const svgPlaceholder = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0xMDAgMjAwTDE1MCA5MEwyMDAgMTYwTDI1MCA4MEwzMDAgMjAwSDEwMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPGV0bGlwc2UgY3g9IjMwMCIgY3k9IjkwIiByeD0iMjAiIHJ5PSIyMCIgZmlsbD0iI0ZCQkYyNCIvPgo8dGV4dCB4PSIyMDAiIHk9IjE4MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2QjcyODAiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkd1bnVuZyBJbmRvbmVzaWE8L3RleHQ+Cjwvc3ZnPg==";
 
-// Trail Card Component with animations and SEO
+// Trail Card Component with fixes
 const TrailCard = ({ mountain, index, availableMountains = [] }) => {
   const [isSaved, setIsSaved] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [imageError, setImageError] = useState(false);
   const [imageSrc, setImageSrc] = useState('');
+  const [isClient, setIsClient] = useState(false);
   
+  // Fix hydration by ensuring client-side only rendering for dynamic content
   useEffect(() => {
+    setIsClient(true);
     const timer = setTimeout(() => {
       setIsVisible(true);
     }, index * 100);
+    
     return () => clearTimeout(timer);
   }, [index]);
   
   useEffect(() => {
-    // Set initial image source
-    if (mountain.image) {
-      setImageSrc(buildImageUrlWithDebug(mountain.image));
-    } else {
-      setImageSrc(getFallbackImageUrl());
+    if (isClient) {
+      // Set initial image source only on client side
+      if (mountain?.image) {
+        // Try direct URL first
+        setImageSrc(buildDirectImageUrl(mountain.image));
+      } else {
+        setImageSrc(getFallbackImageUrl());
+      }
     }
-    
-    // Log mountain data untuk debugging
-    console.log('TrailCard mountain data:', {
-      id: mountain.id,
-      name: mountain.name,
-      image: mountain.image,
-      imageUrl: mountain.image ? buildImageUrlWithDebug(mountain.image) : 'No image'
-    });
-  }, [mountain, availableMountains]);
+  }, [mountain, availableMountains, isClient]);
   
   const getDifficultyColor = (difficulty) => {
     switch (difficulty?.toLowerCase()) {
@@ -140,110 +130,110 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
       case 'moderate': 
       case 'medium': return 'Sedang';
       case 'hard': return 'Sulit';
-      default: return difficulty;
+      default: return difficulty || 'Tidak diketahui';
     }
   };
   
   const getFallbackImageUrl = () => {
-    // Get a random mountain image as fallback, excluding current mountain
+    if (!availableMountains || availableMountains.length === 0) {
+      return svgPlaceholder;
+    }
+    
     const mountainsWithImages = availableMountains.filter(m => 
-      m.image && m.id !== mountain.id
+      m?.image && m?.id !== mountain?.id
     );
     
     if (mountainsWithImages.length > 0) {
-      // Use a consistent fallback based on mountain ID to avoid random changes
-      const fallbackIndex = mountain.id % mountainsWithImages.length;
-      const fallbackImage = mountainsWithImages[fallbackIndex].image;
-      // Use external proxy for fallback too
-      return buildImageUrlViaProxy(fallbackImage);
+      const fallbackIndex = (mountain?.id || 0) % mountainsWithImages.length;
+      const fallbackImage = mountainsWithImages[fallbackIndex]?.image;
+      return fallbackImage ? buildDirectImageUrl(fallbackImage) : svgPlaceholder;
     }
     
-    // Final SVG fallback
     return svgPlaceholder;
   };
   
   const handleImageError = () => {
-    console.error('Image failed to load:', imageSrc);
-    console.log('Mountain data:', mountain);
-    
-    // Try different proxy services in sequence
-    if (imageSrc.includes('images.weserv.nl')) {
-      console.log('🔄 weserv.nl failed, trying allorigins...');
-      const originalUrl = `https://adrianfirmansyah-website.my.id/trailview/assets/${mountain.image}`;
-      setImageSrc(`https://api.allorigins.win/raw?url=${encodeURIComponent(originalUrl)}`);
-      return;
-    }
-    
-    if (imageSrc.includes('allorigins.win')) {
-      console.log('🔄 allorigins failed, trying thingproxy...');
-      const originalUrl = `https://adrianfirmansyah-website.my.id/trailview/assets/${mountain.image}`;
-      setImageSrc(`https://thingproxy.freeboard.io/fetch/${originalUrl}`);
-      return;
-    }
-    
-    if (imageSrc.includes('thingproxy.freeboard.io')) {
-      console.log('🔄 thingproxy failed, trying direct URL...');
-      setImageSrc(buildDirectImageUrl(mountain.image));
-      return;
-    }
-    
-    // If everything failed, try fallback image
-    if (imageSrc === buildDirectImageUrl(mountain.image)) {
-      console.log('🔄 Direct URL failed, trying fallback image...');
-      setImageError(true);
+    if (isClient) {
+      console.error('Image failed to load:', imageSrc);
+      
+      // Try different strategies in sequence
+      if (imageSrc && imageSrc.includes('adrianfirmansyah-website.my.id') && !imageSrc.includes('weserv.nl')) {
+        // If direct URL failed, try proxy
+        console.log('Direct URL failed, trying proxy...');
+        const proxyUrl = buildImageUrlViaProxy(mountain.image);
+        if (proxyUrl) {
+          setImageSrc(proxyUrl);
+          return;
+        }
+      }
+      
+      // If everything failed, use fallback
       setImageSrc(getFallbackImageUrl());
     }
   };
   
-  // Structured data for each mountain
-  const mountainSchema = {
-    "@context": "https://schema.org",
-    "@type": "TouristAttraction",
-    "name": mountain.name,
-    "description": `Jalur pendakian ${mountain.name} di ${mountain.kota}, ${mountain.provinsi}. Ketinggian ${mountain.elevation}, tingkat kesulitan ${getDifficultyText(mountain.difficulty)}.`,
-    "address": {
-      "@type": "PostalAddress",
-      "addressLocality": mountain.kota,
-      "addressRegion": mountain.provinsi,
-      "addressCountry": "ID"
-    },
-    "geo": {
-      "@type": "GeoCoordinates",
-      "elevation": mountain.elevation
-    },
-    "image": mountain.image ? buildDirectImageUrl(mountain.image) : svgPlaceholder, // Use direct URL for SEO
-    "aggregateRating": mountain.rating ? {
-      "@type": "AggregateRating",
-      "ratingValue": mountain.rating,
-      "bestRating": "5"
-    } : undefined
+  // Don't render until client-side
+  if (!isClient) {
+    return (
+      <div className="group relative bg-white rounded-xl overflow-hidden shadow-sm h-80 animate-pulse">
+        <div className="h-48 bg-gray-200"></div>
+        <div className="p-5">
+          <div className="h-4 bg-gray-200 rounded mb-3"></div>
+          <div className="h-3 bg-gray-200 rounded mb-2"></div>
+          <div className="h-3 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Ensure mountain data exists
+  if (!mountain) {
+    return null;
+  }
+  
+  // Handle card click navigation
+  const handleCardClick = (e) => {
+    // Don't navigate if clicking the bookmark button
+    if (e.target.closest('button')) {
+      return;
+    }
+    
+    // Navigate to mountain detail page
+    if (mountain?.id) {
+      window.location.href = `/mountains/${mountain.id}`;
+    }
   };
   
   return (
-    <a 
-      href={`/mountains/${mountain.id}`} 
-      className={`group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 block transform hover:-translate-y-2 ${
+    <div 
+      onClick={handleCardClick}
+      className={`group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 cursor-pointer ${
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
       }`}
       style={{ transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }}
-      title={`Info jalur pendakian ${mountain.name} - ${mountain.kota}, ${mountain.provinsi}`}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleCardClick(e);
+        }
+      }}
+      aria-label={`Lihat detail pendakian Gunung ${mountain?.name || 'Unknown'}`}
     >
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(mountainSchema) }}
-      />
       <div className="relative h-48 overflow-hidden">
         <Image
           src={imageSrc || svgPlaceholder} 
-          alt={`Jalur pendakian Gunung ${mountain.name} di ${mountain.kota}, ${mountain.provinsi}`}
+          alt={`Jalur pendakian Gunung ${mountain.name || 'Unknown'} di ${mountain.kota || 'Unknown'}, ${mountain.provinsi || 'Unknown'}`}
           width={400}
           height={300}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-          priority={index < 4} // Prioritize first 4 images for better LCP
+          priority={index < 4}
           placeholder="blur"
           blurDataURL={svgPlaceholder}
           onError={handleImageError}
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+          unoptimized={true} // Disable Next.js optimization for external images
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         <button
@@ -253,7 +243,7 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
             setIsSaved(!isSaved);
           }}
           className="absolute top-3 right-3 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-300 hover:scale-110"
-          aria-label={`Simpan ${mountain.name}`}
+          aria-label={`Simpan ${mountain.name || 'gunung ini'}`}
         >
           <BookmarkIcon filled={isSaved} />
         </button>
@@ -262,7 +252,7 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
       <div className="p-5">
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-lg font-semibold text-gray-900 group-hover:text-green-600 transition-colors duration-300">
-            Gunung {mountain.name}
+            Gunung {mountain.name || 'Unknown'}
           </h3>
           {mountain.difficulty && (
             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${getDifficultyColor(mountain.difficulty)} transform group-hover:scale-105 transition-transform duration-300`}>
@@ -273,13 +263,13 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
         
         <div className="flex items-center text-sm text-gray-600 mb-3 group-hover:text-gray-700 transition-colors duration-300">
           <MapPinIcon />
-          <span className="ml-1">{mountain.kota}, {mountain.provinsi}</span>
+          <span className="ml-1">{mountain.kota || 'Unknown'}, {mountain.provinsi || 'Unknown'}</span>
         </div>
         
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center text-gray-600 group-hover:text-gray-700 transition-colors duration-300">
             <ElevationIcon />
-            <span className="ml-1">Ketinggian: {mountain.elevation}m</span>
+            <span className="ml-1">Ketinggian: {mountain.elevation || 'Unknown'}m</span>
           </div>
           {mountain.rating && (
             <div className="flex items-center transform group-hover:scale-110 transition-transform duration-300">
@@ -289,22 +279,30 @@ const TrailCard = ({ mountain, index, availableMountains = [] }) => {
           )}
         </div>
       </div>
-    </a>
+    </div>
   );
 };
 
-export default function Home({ mountains = [], error }) {
+export default function Home({ mountains = [], totalCount = 0, error }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProvince, setSelectedProvince] = useState("All");
   const [filteredMountains, setFilteredMountains] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const searchRef = useRef(null);
   
   const itemsPerPage = 4;
   
+  // Fix hydration by ensuring client-side only rendering
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
+  useEffect(() => {
+    if (!isClient) return;
+    
     const handleClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setShowDropdown(false);
@@ -316,12 +314,14 @@ export default function Home({ mountains = [], error }) {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [isClient]);
   
-  const uniqueProvinces = ["All", ...new Set(mountains.map(m => m.provinsi))].filter(Boolean).sort();
+  // Ensure mountains is always an array
+  const safeMountains = Array.isArray(mountains) ? mountains : [];
+  const uniqueProvinces = ["All", ...new Set(safeMountains.map(m => m?.provinsi).filter(Boolean))].sort();
   
-  const provinceCounts = mountains.reduce((acc, mountain) => {
-    const province = mountain.provinsi;
+  const provinceCounts = safeMountains.reduce((acc, mountain) => {
+    const province = mountain?.provinsi;
     if (province) {
       acc[province] = (acc[province] || 0) + 1;
     }
@@ -332,11 +332,11 @@ export default function Home({ mountains = [], error }) {
     const value = e.target.value;
     setSearchTerm(value);
     
-    if (value) {
-      const filtered = mountains.filter(mountain =>
-        mountain.name.toLowerCase().includes(value.toLowerCase()) ||
-        mountain.kota?.toLowerCase().includes(value.toLowerCase()) ||
-        mountain.provinsi?.toLowerCase().includes(value.toLowerCase())
+    if (value && isClient) {
+      const filtered = safeMountains.filter(mountain =>
+        mountain?.name?.toLowerCase().includes(value.toLowerCase()) ||
+        mountain?.kota?.toLowerCase().includes(value.toLowerCase()) ||
+        mountain?.provinsi?.toLowerCase().includes(value.toLowerCase())
       );
       setFilteredMountains(filtered);
       setShowDropdown(true);
@@ -347,10 +347,10 @@ export default function Home({ mountains = [], error }) {
   };
   
   const getCurrentMountains = () => {
-    let currentMountains = mountains;
+    let currentMountains = safeMountains;
     
     if (selectedProvince !== "All") {
-      currentMountains = currentMountains.filter(m => m.provinsi === selectedProvince);
+      currentMountains = currentMountains.filter(m => m?.provinsi === selectedProvince);
     }
     
     return currentMountains;
@@ -392,8 +392,8 @@ export default function Home({ mountains = [], error }) {
         <link rel="canonical" href="https://trailview.id" />
         
         {/* Hreflang for Indonesian */}
-        <link rel="alternate" hreflang="id" href="https://trailview.id" />
-        <link rel="alternate" hreflang="x-default" href="https://trailview.id" />
+        <link rel="alternate" hrefLang="id" href="https://trailview.id" />
+        <link rel="alternate" hrefLang="x-default" href="https://trailview.id" />
         
         {/* Structured Data - Organization */}
         <script
@@ -455,23 +455,22 @@ export default function Home({ mountains = [], error }) {
       </Head>
       
       <div className="min-h-screen bg-gray-50">
-        {/* Static Header - Stays at top */}
+        {/* Static Header */}
         <header className="absolute top-0 left-0 right-0 z-50 bg-transparent">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-20">
               <div className="flex items-center">
                 <h1 className="text-2xl font-bold flex items-center text-white drop-shadow-lg">
                   <MountainIcon />
-                  <span className="ml-2 animate-fade-in">TrailView ID</span>
+                  <span className="ml-2">TrailView ID</span>
                 </h1>
               </div>
               
               <nav className="hidden md:flex items-center space-x-8">
-                {['Explore', 'Saved', 'Maps', 'Community'].map((item, index) => (
+                {['Explore', 'Saved', 'Maps', 'Community'].map((item) => (
                   <button 
                     key={item}
                     className="font-medium flex items-center transition-all duration-300 hover:scale-105 text-white hover:text-green-300 drop-shadow-lg"
-                    style={{ animationDelay: `${index * 100}ms` }}
                   >
                     {item}
                     {(item === 'Explore' || item === 'Saved') && <ChevronRightIcon />}
@@ -494,17 +493,16 @@ export default function Home({ mountains = [], error }) {
             </div>
           </div>
           
-          {/* Mobile Menu with slide animation */}
+          {/* Mobile Menu */}
           <div className={`md:hidden bg-black/80 backdrop-blur-md border-t border-white/20 overflow-hidden transition-all duration-500 ${
             mobileMenuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'
           }`}>
             <nav className="py-4 px-4 space-y-2">
-              {['Explore', 'Saved', 'Maps', 'Community'].map((item, index) => (
+              {['Explore', 'Saved', 'Maps', 'Community'].map((item) => (
                 <a 
                   key={item} 
                   href="#" 
                   className="block py-3 text-white hover:text-green-300 font-medium transition-all duration-300 hover:translate-x-2"
-                  style={{ animationDelay: `${index * 50}ms` }}
                 >
                   {item}
                 </a>
@@ -513,27 +511,27 @@ export default function Home({ mountains = [], error }) {
           </div>
         </header>
         
-        {/* Hero Section with parallax effect */}
+        {/* Hero Section */}
         <section className="relative h-screen flex items-center justify-center overflow-hidden">
           <div 
             className="absolute inset-0 bg-cover bg-center transform scale-110"
             style={{
-              backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.4)), url('/images/hiking.jpg')`
+              backgroundImage: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.4)), url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80')`
             }}
           />
           
           <div className="relative z-10 text-center text-white max-w-4xl mx-auto px-4">
-            <h1 className="text-5xl md:text-7xl font-bold mb-4 animate-fade-in-up">
+            <h1 className="text-5xl md:text-7xl font-bold mb-4">
               Temukan <span className="text-green-400">Jalur Pendakian</span>
             </h1>
-            <h2 className="text-3xl md:text-5xl font-bold mb-8 animate-fade-in-up">
+            <h2 className="text-3xl md:text-5xl font-bold mb-8">
               Gunung Indonesia
             </h2>
-            <p className="text-xl md:text-2xl mb-8 animate-fade-in-up-delay text-gray-200">
+            <p className="text-xl md:text-2xl mb-8 text-gray-200">
               Database terlengkap informasi pendakian gunung di Nusantara
             </p>
             
-            <div className="relative max-w-2xl mx-auto animate-fade-in-up-delay" ref={searchRef}>
+            <div className="relative max-w-2xl mx-auto" ref={searchRef}>
               <div className="relative group">
                 <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 transition-all duration-300 group-hover:text-gray-600">
                   <SearchIcon />
@@ -543,79 +541,76 @@ export default function Home({ mountains = [], error }) {
                   placeholder="Cari nama gunung, kota, atau provinsi..."
                   value={searchTerm}
                   onChange={handleSearchChange}
-                  className="w-full pl-12 pr-4 py-4 rounded-full text-gray-800 text-lg shadow-2xl focus:outline-none focus:ring-4 focus:ring-green-400 focus:ring-opacity-50 transition-all duration-300 hover:shadow-3xl"
+                  className="w-full pl-12 pr-4 py-4 rounded-full text-gray-800 text-lg shadow-2xl focus:outline-none focus:ring-4 focus:ring-green-400 focus:ring-opacity-50 transition-all duration-300"
                   aria-label="Cari jalur pendakian gunung"
                 />
               </div>
               
-              {showDropdown && filteredMountains.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl max-h-80 overflow-y-auto animate-slide-down">
-                  {filteredMountains.map((mountain, index) => (
-                    <a
-                      key={mountain.id}
-                      href={`/mountains/${mountain.id}`}
-                      className="flex items-center p-4 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 text-gray-800 transition-all duration-300 hover:translate-x-2"
-                      style={{ animationDelay: `${index * 50}ms` }}
+              {isClient && showDropdown && filteredMountains.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl max-h-80 overflow-y-auto">
+                  {filteredMountains.map((mountain) => (
+                    <div
+                      key={mountain?.id || Math.random()}
+                      onClick={() => {
+                        if (mountain?.id) {
+                          window.location.href = `/mountains/${mountain.id}`;
+                        }
+                      }}
+                      className="flex items-center p-4 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 text-gray-800 transition-all duration-300 cursor-pointer"
                     >
-                      <Image 
-                        src={mountain.image ? buildImageUrlWithDebug(mountain.image) : svgPlaceholder} 
-                        alt={`Jalur pendakian ${mountain.name}`}
-                        width={48}
-                        height={48}
-                        className="w-12 h-12 rounded-lg object-cover mr-3 animate-fade-in"
-                        onError={() => {
-                          console.error('Search dropdown image failed:', mountain.image);
-                          // Get fallback from other mountains using proxy URL
-                          const mountainsWithImages = mountains.filter(m => 
-                            m.image && m.id !== mountain.id
-                          );
-                          
-                          if (mountainsWithImages.length > 0) {
-                            const fallbackIndex = mountain.id % mountainsWithImages.length;
-                            const fallbackImage = mountainsWithImages[fallbackIndex].image;
-                            return buildImageUrl(fallbackImage);
-                          } else {
-                            return svgPlaceholder;
-                          }
-                        }}
-                        onLoad={() => console.log('Search dropdown image loaded:', mountain.image)}
-                      />
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">{mountain.name}</h4>
-                        <p className="text-sm text-gray-600">{mountain.kota}, {mountain.provinsi}</p>
+                      <div className="w-12 h-12 rounded-lg bg-gray-200 mr-3 flex items-center justify-center overflow-hidden">
+                        {mountain?.image ? (
+                          <Image
+                            src={buildDirectImageUrl(mountain.image) || svgPlaceholder}
+                            alt={`${mountain.name}`}
+                            width={48}
+                            height={48}
+                            className="w-full h-full object-cover"
+                            unoptimized={true}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <span className="text-2xl" style={{ display: mountain?.image ? 'none' : 'flex' }}>🏔️</span>
                       </div>
-                    </a>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900">{mountain?.name || 'Unknown'}</h4>
+                        <p className="text-sm text-gray-600">{mountain?.kota || 'Unknown'}, {mountain?.provinsi || 'Unknown'}</p>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
             
             <nav className="mt-6" aria-label="Quick links">
-              <a href="#trails" className="text-white underline hover:no-underline text-lg transition-all duration-300 hover:scale-105 animate-pulse-slow">
+              <a href="#trails" className="text-white underline hover:no-underline text-lg transition-all duration-300 hover:scale-105">
                 Jelajahi jalur pendakian terdekat
               </a>
             </nav>
           </div>
         </section>
         
-        {/* Trails Section with stagger animation */}
+        {/* Trails Section */}
         <section id="trails" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="mb-10 animate-fade-in">
+          <div className="mb-10">
             <h2 className="text-4xl font-bold text-gray-900 mb-2">
-              Jalur Pendakian Gunung Populer di <span className="text-green-600 animate-color-change">Indonesia</span>
+              Jalur Pendakian Gunung Populer di <span className="text-green-600">Indonesia</span>
             </h2>
-            <p className="text-gray-600 text-lg">Jelajahi {mountains.length} gunung dengan jalur pendakian resmi di seluruh Nusantara</p>
+            <p className="text-gray-600 text-lg">Jelajahi {totalCount > 0 ? totalCount : safeMountains.length} gunung dengan jalur pendakian resmi di seluruh Nusantara</p>
           </div>
           
           {/* SEO Content Section */}
-          <div className="mb-12 prose prose-lg max-w-none animate-fade-in-up">
+          <div className="mb-12 prose prose-lg max-w-none">
             <p className="text-gray-700 leading-relaxed">
               Indonesia memiliki lebih dari 400 gunung yang tersebar di berbagai pulau, menjadikannya surga bagi para pendaki dan pecinta alam. 
               Dari Sabang sampai Merauke, setiap gunung menawarkan keunikan tersendiri dengan jalur pendakian yang menantang dan pemandangan yang memukau.
             </p>
           </div>
           
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 animate-fade-in-up">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
               <label htmlFor="province-filter" className="block text-sm font-medium text-gray-700 mb-2">
                 Filter berdasarkan Provinsi
@@ -632,7 +627,7 @@ export default function Home({ mountains = [], error }) {
               >
                 {uniqueProvinces.map(province => (
                   <option key={province} value={province}>
-                    {province} {province === "All" ? `(${mountains.length} gunung)` : `(${provinceCounts[province] || 0} gunung)`}
+                    {province} {province === "All" ? `(${totalCount > 0 ? `${totalCount} total, menampilkan ${safeMountains.length}` : `${safeMountains.length} gunung`})` : `(${provinceCounts[province] || 0} gunung)`}
                   </option>
                 ))}
               </select>
@@ -666,25 +661,51 @@ export default function Home({ mountains = [], error }) {
           </div>
           
           {error ? (
-            <p className="text-center text-gray-600 py-8 animate-fade-in">
-              Data gunung tidak tersedia saat ini. Silakan coba lagi nanti.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" role="list">
-              {currentMountains.map((mountain, index) => (
-                <article key={mountain.id} role="listitem">
-                  <TrailCard 
-                    mountain={mountain}
-                    index={index}
-                    availableMountains={mountains}
-                  />
-                </article>
-              ))}
+            <div className="text-center py-12">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md mx-auto">
+                <p className="text-yellow-800 font-medium mb-2">Data Tidak Tersedia</p>
+                <p className="text-yellow-600 text-sm">
+                  Data gunung tidak tersedia saat ini. Silakan coba lagi nanti.
+                </p>
+              </div>
             </div>
+          ) : safeMountains.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 max-w-md mx-auto">
+                <p className="text-gray-600">Tidak ada data gunung yang tersedia.</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" role="list">
+                {currentMountains.map((mountain, index) => (
+                  <article key={mountain?.id || `mountain-${index}`} role="listitem">
+                    <TrailCard 
+                      mountain={mountain}
+                      index={index}
+                      availableMountains={safeMountains}
+                    />
+                  </article>
+                ))}
+              </div>
+              
+              {/* Show message about data limitation */}
+              {totalCount > safeMountains.length && (
+                <div className="mt-8 text-center">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl mx-auto">
+                    <p className="text-blue-800 text-sm">
+                      <strong>Menampilkan {safeMountains.length} dari {totalCount} gunung.</strong> 
+                      <br />
+                      Untuk performa optimal, kami membatasi tampilan data. Gunakan filter provinsi untuk melihat gunung spesifik.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
           )}
           
           {/* Additional SEO Content */}
-          <div className="mt-16 grid md:grid-cols-3 gap-8 animate-fade-in-up">
+          <div className="mt-16 grid md:grid-cols-3 gap-8">
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <h3 className="text-xl font-semibold mb-3 text-gray-900">Gunung Tertinggi di Jawa</h3>
               <p className="text-gray-600">
@@ -709,8 +730,8 @@ export default function Home({ mountains = [], error }) {
           </div>
         </section>
         
-        {/* Footer with fade-in animation */}
-        <footer className="bg-gray-900 text-white py-16 px-4 sm:px-6 lg:px-8 animate-fade-in">
+        {/* Footer */}
+        <footer className="bg-gray-900 text-white py-16 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">
             {/* FAQ Section for SEO */}
             <div className="mb-12 bg-gray-800 rounded-lg p-8">
@@ -774,7 +795,7 @@ export default function Home({ mountains = [], error }) {
                   ] 
                 }
               ].map((section, index) => (
-                <div key={section.title} className="animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+                <div key={section.title}>
                   <h3 className="text-lg font-semibold mb-4">{section.title}</h3>
                   <ul className="space-y-2 text-gray-400">
                     {section.items.map(item => (
@@ -895,20 +916,39 @@ export async function getStaticProps() {
   try {
     console.log('Fetching mountains data from API...');
     const res = await fetch("https://adrianfirmansyah-website.my.id/trailview/items/mountains");
+    
     if (!res.ok) {
       throw new Error(`API response error: ${res.status} ${res.statusText}`);
     }
+    
     const jsonData = await res.json();
-
-    const mountains = jsonData.data;
-    console.log('Fetched mountains count:', mountains.length);
-    console.log('Sample mountain data:', mountains[0]);
+    const fullMountains = Array.isArray(jsonData?.data) ? jsonData.data : [];
+    
+    // Optimize data - only keep essential fields and limit to first 20 mountains
+    const mountains = fullMountains.slice(0, 20).map(mountain => ({
+      id: mountain.id,
+      name: mountain.name,
+      kota: mountain.kota,
+      provinsi: mountain.provinsi,
+      elevation: mountain.elevation,
+      difficulty: mountain.difficulty,
+      rating: mountain.rating,
+      image: mountain.image
+    }));
+    
+    console.log('Optimized mountains count:', mountains.length);
+    console.log('Total available mountains:', fullMountains.length);
+    
+    if (mountains.length > 0) {
+      console.log('Sample mountain data:', mountains[0]);
+    }
 
     return {
       props: {
         mountains,
+        totalCount: fullMountains.length, // Include total count for display
       },
-      revalidate: 10,
+      revalidate: 300, // Revalidate every 5 minutes
     };
   } catch (error) {
     console.error("Failed to fetch mountains data:", error);
@@ -916,9 +956,10 @@ export async function getStaticProps() {
     return {
       props: {
         mountains: [],
+        totalCount: 0,
         error: "Unable to fetch mountains data",
       },
-      revalidate: 10,
+      revalidate: 60, // Retry sooner if error
     };
   }
 }

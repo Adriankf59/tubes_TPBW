@@ -5,8 +5,8 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'directus-394340675569.us-central1.run.app',
-        pathname: '/assets/**',
+        hostname: 'adrianfirmansyah-website.my.id',
+        pathname: '/trailview/assets/**',
       },
     ],
   },
