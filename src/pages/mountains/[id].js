@@ -68,6 +68,13 @@ const WeatherIcon = () => (
   </svg>
 );
 
+// Close Icon for mobile
+const CloseIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
 // Helper function to convert Directus GeoJSON data to standard format
 const convertDirectusGeoJSONToStandard = (directusData) => {
   if (!directusData || !Array.isArray(directusData)) return [];
@@ -194,6 +201,24 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return distance;
 };
 
+// Hook to detect mobile device
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  return isMobile;
+};
+
 export default function Mountain({ mountain, directusData, directusPoints, directusLines, centerCoordinates }) {
   console.log('=== MOUNTAIN COMPONENT PROPS ===');
   console.log('Mountain:', mountain?.name);
@@ -211,6 +236,9 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
   const [showStyleBox, setShowStyleBox] = useState(false);
   const [showWeatherBox, setShowWeatherBox] = useState(false);
   const key = 'Bt7BC1waN22lhYojEJO1';
+
+  // Mobile detection
+  const isMobile = useIsMobile();
 
   // Process the data - handle both old format and new GeoJSON format - WITH DEBUGGING
   const [processedPoints, setProcessedPoints] = useState([]);
@@ -556,7 +584,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
     }
   }, [pointsWithElevation, processedPoints, processedLines, trailSegments]);
 
-  // Function to setup map event listeners - STABLE VERSION
+  // Function to setup map event listeners - MOBILE OPTIMIZED VERSION
   const setupMapEventListeners = useCallback((mapInstance) => {
     if (!mapInstance || 
         typeof mapInstance.getLayer !== 'function' ||
@@ -575,14 +603,24 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       mapInstance.off('click', 'lines-layer');
       mapInstance.off('mouseenter', 'lines-layer');
       mapInstance.off('mouseleave', 'lines-layer');
+      mapInstance.off('click', 'points-layer');
+      mapInstance.off('touchstart', 'points-layer');
+      mapInstance.off('touchstart', 'lines-layer');
     } catch (e) {
       // Ignore errors if listeners don't exist
     }
 
-    const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+    const popup = new maplibregl.Popup({ 
+      closeButton: false, 
+      closeOnClick: false,
+      // Mobile optimizations
+      maxWidth: isMobile ? '280px' : '400px',
+      className: isMobile ? 'mobile-popup' : ''
+    });
 
-    // Point hover events
+    // Point hover events (desktop) and click events (mobile)
     const onPointMouseEnter = (e) => {
+      if (isMobile) return; // Skip hover on mobile
       console.log('Point mouse enter triggered');
       mapInstance.getCanvas().style.cursor = 'pointer';
       const coordinates = e.features[0].geometry.coordinates.slice();
@@ -600,12 +638,39 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
     };
 
     const onPointMouseLeave = () => {
+      if (isMobile) return; // Skip hover on mobile
       console.log('Point mouse leave triggered');
       mapInstance.getCanvas().style.cursor = '';
       popup.remove();
     };
 
-    // Line click events
+    // Mobile-specific click handler for points
+    const onPointClick = (e) => {
+      if (!isMobile) return; // Only on mobile
+      console.log('Point click triggered on mobile');
+      const coordinates = e.features[0].geometry.coordinates.slice();
+      const properties = e.features[0].properties;
+      
+      let elevationInfo = '';
+      if (properties.elevation !== null && !properties.elevationError) {
+        elevationInfo = `<br>Ketinggian: ${Math.round(properties.elevation)} m`;
+      } else {
+        elevationInfo = '<br>Ketinggian: Tidak tersedia';
+      }
+      
+      const description = `<strong>${properties.name}</strong><br>${properties.description}<br>Koordinat: [${coordinates[0].toFixed(5)}, ${coordinates[1].toFixed(5)}]${elevationInfo}`;
+      
+      const pointPopup = new maplibregl.Popup({ 
+        closeOnClick: true,
+        maxWidth: '280px',
+        className: 'mobile-popup'
+      })
+        .setLngLat(coordinates)
+        .setHTML(description)
+        .addTo(mapInstance);
+    };
+
+    // Line click events (optimized for mobile)
     const onLineClick = (e) => {
       console.log('Line click triggered');
       const feature = e.features[0];
@@ -616,23 +681,27 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       
       const coordinates = e.lngLat;
       
-      const trailPopup = new maplibregl.Popup({ closeOnClick: true })
+      const trailPopup = new maplibregl.Popup({ 
+        closeOnClick: true,
+        maxWidth: isMobile ? '260px' : '300px',
+        className: isMobile ? 'mobile-popup' : ''
+      })
         .setLngLat(coordinates)
         .setHTML(`
-          <div class="trail-popup" style="min-width: 200px; padding: 8px;">
-            <div style="font-weight: bold; color: #059669; margin-bottom: 8px; font-size: 14px;">
+          <div class="trail-popup" style="min-width: ${isMobile ? '200px' : '200px'}; padding: ${isMobile ? '6px' : '8px'};">
+            <div style="font-weight: bold; color: #059669; margin-bottom: ${isMobile ? '6px' : '8px'}; font-size: ${isMobile ? '13px' : '14px'};">
               📍 ${name}
             </div>
-            <div style="margin-bottom: 6px; font-size: 12px; color: #6b7280;">
+            <div style="margin-bottom: ${isMobile ? '4px' : '6px'}; font-size: ${isMobile ? '11px' : '12px'}; color: #6b7280;">
               ${description}
             </div>
-            <div style="background: #f0fdf4; padding: 8px; border-radius: 6px; border-left: 3px solid #10b981;">
-              <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Panjang Jalur</div>
-              <div style="font-weight: bold; color: #059669; font-size: 16px;">
+            <div style="background: #f0fdf4; padding: ${isMobile ? '6px' : '8px'}; border-radius: ${isMobile ? '4px' : '6px'}; border-left: 3px solid #10b981;">
+              <div style="font-size: ${isMobile ? '10px' : '11px'}; color: #6b7280; margin-bottom: 2px;">Panjang Jalur</div>
+              <div style="font-weight: bold; color: #059669; font-size: ${isMobile ? '14px' : '16px'};">
                 📏 ${distance ? distance.toFixed(2) : 'N/A'} km
               </div>
             </div>
-            <div style="margin-top: 8px; font-size: 10px; color: #9ca3af; text-align: center;">
+            <div style="margin-top: ${isMobile ? '6px' : '8px'}; font-size: ${isMobile ? '9px' : '10px'}; color: #9ca3af; text-align: center;">
               Klik jalur lain untuk melihat detail lainnya
             </div>
           </div>
@@ -640,8 +709,9 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
         .addTo(mapInstance);
     };
 
-    // Line hover events
+    // Line hover events (desktop only)
     const onLineMouseEnter = (e) => {
+      if (isMobile) return; // Skip hover on mobile
       console.log('Line mouse enter triggered');
       mapInstance.getCanvas().style.cursor = 'pointer';
       const segmentId = e.features[0].properties.id;
@@ -658,6 +728,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
     };
 
     const onLineMouseLeave = () => {
+      if (isMobile) return; // Skip hover on mobile
       console.log('Line mouse leave triggered');
       mapInstance.getCanvas().style.cursor = '';
       
@@ -681,21 +752,30 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       console.log('Lines layer exists:', !!linesLayer);
       
       if (pointsLayer) {
-        mapInstance.on('mouseenter', 'points-layer', onPointMouseEnter);
-        mapInstance.on('mouseleave', 'points-layer', onPointMouseLeave);
+        if (isMobile) {
+          // On mobile, use click events for points
+          mapInstance.on('click', 'points-layer', onPointClick);
+        } else {
+          // On desktop, use hover events for points
+          mapInstance.on('mouseenter', 'points-layer', onPointMouseEnter);
+          mapInstance.on('mouseleave', 'points-layer', onPointMouseLeave);
+        }
         console.log('Point event listeners added successfully');
       }
       
       if (linesLayer) {
         mapInstance.on('click', 'lines-layer', onLineClick);
-        mapInstance.on('mouseenter', 'lines-layer', onLineMouseEnter);
-        mapInstance.on('mouseleave', 'lines-layer', onLineMouseLeave);
+        if (!isMobile) {
+          // Only add hover events on desktop
+          mapInstance.on('mouseenter', 'lines-layer', onLineMouseEnter);
+          mapInstance.on('mouseleave', 'lines-layer', onLineMouseLeave);
+        }
         console.log('Line event listeners added successfully');
       }
     } catch (error) {
       console.error('Error adding map event listeners:', error);
     }
-  }, []);
+  }, [isMobile]);
 
   // Add weather marker function
   const addWeatherMarker = useCallback((mapInstance) => {
@@ -752,7 +832,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
         layout: {
           'text-field': getWeatherEmoji(weatherData.current.weather[0].main) + '\n{temp}°C',
           'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-          'text-size': 20,
+          'text-size': isMobile ? 16 : 20, // Smaller on mobile
           'text-anchor': 'bottom',
           'text-offset': [0, -1]
         },
@@ -767,7 +847,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
     } catch (error) {
       console.error('Error adding weather marker:', error);
     }
-  }, [weatherData, centerCoordinates, peakCoordinates]);
+  }, [weatherData, centerCoordinates, peakCoordinates, isMobile]);
 
   const toggle3D = () => {
     if (!map || !mapLoaded) {
@@ -797,7 +877,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
           });
         }
         map.setTerrain({ source: 'terrain', exaggeration: 1.5 });
-        map.setPitch(60);
+        map.setPitch(isMobile ? 45 : 60); // Less aggressive pitch on mobile
       } else {
         const existingTerrain = map.getSource('terrain');
         if (existingTerrain) {
@@ -948,7 +1028,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       setStyleChangeInProgress(false);
       setMapLoaded(true);
     }
-  }, [map, mapLoaded, styleChangeInProgress, is3D, key, addMapFeatures, setupMapEventListeners, addWeatherMarker, weatherData, pointsWithElevation, processedPoints, processedLines]);
+  }, [map, mapLoaded, styleChangeInProgress, is3D, key, addMapFeatures, setupMapEventListeners, addWeatherMarker, weatherData, pointsWithElevation, processedPoints, processedLines, isMobile]);
 
   const toggleWeatherInfo = () => {
     setShowWeatherInfo(!showWeatherInfo);
@@ -967,21 +1047,23 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
       container: mapContainerRef.current,
       style: `https://api.maptiler.com/maps/${mapStyle}/style.json?key=${key}`,
       center: centerCoordinates,
-      zoom: 13,
+      zoom: isMobile ? 12 : 13, // Slightly zoomed out on mobile
       maxPitch: 85
     });
 
+    // Mobile-optimized navigation control
     newMap.addControl(new maplibregl.NavigationControl({ 
       visualizePitch: true, 
       showZoom: true, 
-      showCompass: true 
+      showCompass: !isMobile // Hide compass on mobile to save space
     }), 'top-right');
     
+    // Mobile-optimized geolocate control
     newMap.addControl(new maplibregl.GeolocateControl({ 
       positionOptions: { enableHighAccuracy: true }, 
       trackUserLocation: true, 
       showUserHeading: true 
-    }), 'bottom-right');
+    }), isMobile ? 'bottom-right' : 'bottom-right');
 
     // CRITICAL: Wait for both load AND styledata to ensure map is fully ready
     let loadComplete = false;
@@ -1030,7 +1112,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
         newMap.remove();
       }
     };
-  }, [centerCoordinates, key, fetchWeatherData, mapStyle]);
+  }, [centerCoordinates, key, fetchWeatherData, mapStyle, isMobile]);
 
   // IMPROVED: Effect for initial map setup and feature loading with better reliability
   useEffect(() => {
@@ -1283,6 +1365,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
         <title>{pageTitle}</title>
         <meta name="description" content={pageDescription} />
         <meta name="keywords" content={pageKeywords} />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         
         <meta property="og:title" content={ogTitle} />
         <meta property="og:description" content={ogDescription} />
@@ -1308,10 +1391,10 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
             text-align: justify;
           }
           .map-container {
-            height: 600px;
+            height: ${isMobile ? '400px' : '600px'};
             width: 100%;
             position: relative;
-            border-radius: 16px;
+            border-radius: ${isMobile ? '12px' : '16px'};
             overflow: hidden;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
           }
@@ -1336,12 +1419,117 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
             color: white;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
           }
+          
+          /* Mobile-specific styles */
+          @media (max-width: 768px) {
+            .mobile-popup .maplibregl-popup-content {
+              padding: 8px 12px !important;
+              font-size: 14px !important;
+              line-height: 1.4 !important;
+              border-radius: 8px !important;
+            }
+            
+            .mobile-popup .maplibregl-popup-tip {
+              border-top-color: #ffffff !important;
+            }
+            
+            .mobile-weather-overlay {
+              position: fixed !important;
+              top: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              bottom: 0 !important;
+              background: rgba(0, 0, 0, 0.5) !important;
+              z-index: 9999 !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: center !important;
+              padding: 20px !important;
+            }
+            
+            .mobile-weather-content {
+              background: white !important;
+              border-radius: 12px !important;
+              padding: 20px !important;
+              max-width: 350px !important;
+              width: 100% !important;
+              max-height: 80vh !important;
+              overflow-y: auto !important;
+              position: relative !important;
+            }
+            
+            .mobile-style-overlay {
+              position: fixed !important;
+              bottom: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              background: white !important;
+              border-radius: 12px 12px 0 0 !important;
+              padding: 20px !important;
+              z-index: 9999 !important;
+              box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15) !important;
+            }
+          }
+          
+          /* Map controls mobile optimization */
+          @media (max-width: 768px) {
+            .map-controls-mobile {
+              position: absolute;
+              top: 8px;
+              left: 8px;
+              right: 8px;
+              display: flex;
+              justify-content: space-between;
+              z-index: 10;
+            }
+            
+            .map-controls-left {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+            }
+            
+            .map-controls-right {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+            }
+            
+            .map-control-button {
+              width: 44px;
+              height: 44px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: white;
+              border-radius: 8px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+              border: none;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            }
+            
+            .map-control-button:hover {
+              transform: translateY(-1px);
+              box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            }
+            
+            .map-control-button.active {
+              background: #10b981;
+              color: white;
+            }
+            
+            .map-control-button:disabled {
+              opacity: 0.5;
+              cursor: not-allowed;
+            }
+          }
         `}</style>
       </Head>
       
       <main className="min-h-screen bg-gray-50">
         {/* Hero Section */}
-        <section className="relative h-[70vh] min-h-[500px] overflow-hidden">
+        <section className={`relative ${isMobile ? 'h-[50vh] min-h-[350px]' : 'h-[70vh] min-h-[500px]'} overflow-hidden`}>
           {mountain.image ? (
             <Image
               src={`https://adrianfirmansyah-website.my.id/trailview/assets/${mountain.image}`}
@@ -1359,7 +1547,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
           
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
           
-          <div className="absolute bottom-0 left-0 right-0 p-8 text-white">
+          <div className={`absolute bottom-0 left-0 right-0 ${isMobile ? 'p-4' : 'p-8'} text-white`}>
             <div className="max-w-7xl mx-auto">
               <Link href="/" legacyBehavior>
                 <a className="inline-flex items-center text-white/80 hover:text-white mb-4 transition-colors duration-300 animate-fade-in">
@@ -1368,11 +1556,11 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                 </a>
               </Link>
               
-              <h1 className="text-5xl md:text-6xl font-bold mb-4 animate-fade-in-up">
+              <h1 className={`${isMobile ? 'text-3xl md:text-4xl' : 'text-5xl md:text-6xl'} font-bold mb-4 animate-fade-in-up`}>
                 Gunung {mountain.name}
               </h1>
               
-              <div className="flex items-center space-x-4 text-lg animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+              <div className={`flex items-center space-x-4 ${isMobile ? 'text-base' : 'text-lg'} animate-fade-in-up`} style={{ animationDelay: '0.1s' }}>
                 <div className="flex items-center">
                   <MapPinIcon />
                   <span className="ml-2">{mountain.kota}, {mountain.provinsi}</span>
@@ -1390,13 +1578,13 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
         
         {/* Stats Section */}
         <section className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+          <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${isMobile ? 'py-4' : 'py-6'}`}>
+            <div className={`grid ${isMobile ? 'grid-cols-2 gap-4' : 'grid-cols-2 md:grid-cols-5 gap-6'}`}>
               <div className="text-center animate-fade-in-up">
                 <div className="flex items-center justify-center mb-2 text-green-600">
                   <ElevationIcon />
                 </div>
-                <div className="text-2xl font-bold text-gray-900">
+                <div className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>
                   {mountain.elevation || mountain.elevation_gain || 'N/A'} m
                 </div>
                 <div className="text-sm text-gray-500">Ketinggian</div>
@@ -1406,7 +1594,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                 <div className="flex items-center justify-center mb-2 text-green-600">
                   <RouteIcon />
                 </div>
-                <div className="text-2xl font-bold text-gray-900">
+                <div className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900`}>
                   {trailDistance ? (
                     trailDistance >= 1 ? `${trailDistance.toFixed(1)} km` : `${(trailDistance * 1000).toFixed(0)} m`
                   ) : (mountain.distance || 'N/A')}
@@ -1414,51 +1602,79 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                 <div className="text-sm text-gray-500">Panjang Jalur</div>
               </div>
               
-              <div className="text-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                <div className="flex items-center justify-center mb-2 text-green-600">
-                  <ClockIcon />
-                </div>
-                <div className="text-2xl font-bold text-gray-900">
-                  {mountain.estimated_time || 'N/A'}
-                </div>
-                <div className="text-sm text-gray-500">Estimasi Waktu</div>
-              </div>
-              
-              <div className="text-center animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-                <div className="flex items-center justify-center mb-2">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getDifficultyColor(mountain.difficulty)}`}>
-                    {getDifficultyText(mountain.difficulty)}
-                  </span>
-                </div>
-                <div className="text-sm text-gray-500">Tingkat Kesulitan</div>
-              </div>
-              
-              <div className="text-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-                <div className="flex items-center justify-center mb-2 text-green-600">
-                  <HikingIcon />
-                </div>
-                <div className="text-2xl font-bold text-gray-900">
-                  {mountain.type || 'Hiking'}
-                </div>
-                <div className="text-sm text-gray-500">Tipe</div>
-              </div>
+              {!isMobile && (
+                <>
+                  <div className="text-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                    <div className="flex items-center justify-center mb-2 text-green-600">
+                      <ClockIcon />
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {mountain.estimated_time || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">Estimasi Waktu</div>
+                  </div>
+                  
+                  <div className="text-center animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                    <div className="flex items-center justify-center mb-2">
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getDifficultyColor(mountain.difficulty)}`}>
+                        {getDifficultyText(mountain.difficulty)}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-500">Tingkat Kesulitan</div>
+                  </div>
+                  
+                  <div className="text-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                    <div className="flex items-center justify-center mb-2 text-green-600">
+                      <HikingIcon />
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {mountain.type || 'Hiking'}
+                    </div>
+                    <div className="text-sm text-gray-500">Tipe</div>
+                  </div>
+                </>
+              )}
             </div>
+            
+            {/* Mobile additional stats */}
+            {isMobile && (
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="text-center animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                  <div className="flex items-center justify-center mb-2 text-green-600">
+                    <ClockIcon />
+                  </div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {mountain.estimated_time || 'N/A'}
+                  </div>
+                  <div className="text-sm text-gray-500">Estimasi Waktu</div>
+                </div>
+                
+                <div className="text-center animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                  <div className="flex items-center justify-center mb-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getDifficultyColor(mountain.difficulty)}`}>
+                      {getDifficultyText(mountain.difficulty)}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-500">Tingkat Kesulitan</div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
         
         {/* Main Content */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="grid lg:grid-cols-3 gap-12">
-            <div className="lg:col-span-2">
+        <section className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${isMobile ? 'py-6' : 'py-12'}`}>
+          <div className={`grid ${isMobile ? 'grid-cols-1 gap-6' : 'lg:grid-cols-3 gap-12'}`}>
+            <div className={isMobile ? 'order-2' : 'lg:col-span-2'}>
               {/* Description */}
-              <div className="bg-white rounded-2xl shadow-sm p-8 mb-8 animate-fade-in-up">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <div className={`bg-white rounded-2xl shadow-sm ${isMobile ? 'p-6 mb-6' : 'p-8 mb-8'} animate-fade-in-up`}>
+                <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900 mb-6 flex items-center`}>
                   <span className="w-1 h-8 bg-green-500 rounded-full mr-4"></span>
                   Deskripsi Jalur Pendakian
                 </h2>
                 {mountain.penjelasan ? (
                   <div 
-                    className="prose prose-lg"
+                    className={`prose ${isMobile ? 'prose-sm' : 'prose-lg'}`}
                     dangerouslySetInnerHTML={{ __html: processDescription(mountain.penjelasan) }}
                   />
                 ) : (
@@ -1470,27 +1686,27 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
               
               {/* Requirements */}
               {mountain.persyaratan && (
-                <div className="bg-white rounded-2xl shadow-sm p-8 mb-8 animate-fade-in-up">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+                <div className={`bg-white rounded-2xl shadow-sm ${isMobile ? 'p-6 mb-6' : 'p-8 mb-8'} animate-fade-in-up`}>
+                  <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900 mb-6 flex items-center`}>
                     <span className="w-1 h-8 bg-green-500 rounded-full mr-4"></span>
                     Persyaratan Pendakian
                   </h2>
                   <div 
-                    className="prose prose-lg"
+                    className={`prose ${isMobile ? 'prose-sm' : 'prose-lg'}`}
                     dangerouslySetInnerHTML={{ __html: processDescription(mountain.persyaratan) }}
                   />
                 </div>
               )}
               
               {/* Map Section */}
-              <div className="bg-white rounded-2xl shadow-sm p-8 animate-fade-in-up">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
+              <div className={`bg-white rounded-2xl shadow-sm ${isMobile ? 'p-4' : 'p-8'} animate-fade-in-up ${isMobile ? 'order-1' : ''}`}>
+                <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900 ${isMobile ? 'mb-4' : 'mb-6'} flex items-center`}>
                   <span className="w-1 h-8 bg-green-500 rounded-full mr-4"></span>
                   Peta Jalur Pendakian
                 </h2>
                 
                 <div className="relative">
-                  <div className="map-container mb-6">
+                  <div className={`map-container ${isMobile ? 'mb-4' : 'mb-6'}`}>
                     <div id="map" ref={mapContainerRef} className="map-container"></div>
                     
                     {/* Map Loading Indicator */}
@@ -1503,95 +1719,135 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                       </div>
                     )}
                     
-                    {/* Map Controls */}
-                    <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
-                      <button 
-                        onClick={toggle3D} 
-                        disabled={!mapLoaded}
-                        className={`p-2 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
-                          is3D ? 'bg-green-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                        title="Toggle 3D View"
-                      >
-                        <Toggle3DIcon />
-                      </button>
+                    {/* Mobile Map Controls */}
+                    {isMobile ? (
+                      <>
+                        <div className="map-controls-mobile">
+                          <div className="map-controls-left">
+                            <button 
+                              onClick={toggle3D} 
+                              disabled={!mapLoaded}
+                              className={`map-control-button ${is3D ? 'active' : ''}`}
+                              title="Toggle 3D View"
+                            >
+                              <Toggle3DIcon />
+                            </button>
 
-                      <button 
-                        onClick={toggleWeatherBox} 
-                        className={`p-2 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 ${
-                          showWeatherInfo ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
-                        }`}
-                        title="Weather Info"
-                      >
-                        <WeatherIcon />
-                      </button>
+                            <button 
+                              onClick={toggleWeatherBox} 
+                              className={`map-control-button ${showWeatherInfo ? 'active' : ''}`}
+                              title="Weather Info"
+                            >
+                              <WeatherIcon />
+                            </button>
+                          </div>
+                        </div>
 
-                      {/* Weather Info Box */}
-                      {showWeatherInfo && (
-                        <div className="absolute top-0 left-16 bg-white rounded-lg shadow-xl p-4 w-80 animate-fade-in z-20">
-                          <div className="flex justify-between items-center mb-3">
-                            <h4 className="font-semibold text-gray-900">Cuaca di {mountain.kota}</h4>
+                        {/* Mobile Style Control - Bottom Left */}
+                        <div className="absolute bottom-2 left-2 z-10">
+                          <button
+                            onClick={toggleStyleBox}
+                            disabled={!mapLoaded}
+                            className="map-control-button"
+                            title="Ubah Gaya Peta"
+                          >
+                            <MapStyleIcon />
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      /* Desktop Map Controls */
+                      <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+                        <button 
+                          onClick={toggle3D} 
+                          disabled={!mapLoaded}
+                          className={`p-2 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            is3D ? 'bg-green-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                          title="Toggle 3D View"
+                        >
+                          <Toggle3DIcon />
+                        </button>
+
+                        <button 
+                          onClick={toggleWeatherBox} 
+                          className={`p-2 rounded-lg shadow-lg transition-all duration-300 hover:scale-105 ${
+                            showWeatherInfo ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                          title="Weather Info"
+                        >
+                          <WeatherIcon />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Mobile Weather Info Overlay */}
+                    {isMobile && showWeatherInfo && (
+                      <div className="mobile-weather-overlay" onClick={toggleWeatherBox}>
+                        <div className="mobile-weather-content" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-between items-center mb-4">
+                            <h4 className="font-semibold text-gray-900 text-lg">Cuaca di {mountain.kota}</h4>
                             <button 
                               onClick={toggleWeatherBox}
-                              className="text-gray-400 hover:text-gray-600"
+                              className="text-gray-400 hover:text-gray-600 p-1"
                             >
-                              ✕
+                              <CloseIcon />
                             </button>
                           </div>
                           
                           {weatherLoading ? (
-                            <div className="text-center py-4">
+                            <div className="text-center py-6">
                               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                              <div className="text-sm text-gray-600 mt-2">Mengambil data cuaca...</div>
+                              <div className="text-sm text-gray-600 mt-3">Mengambil data cuaca...</div>
                             </div>
                           ) : weatherError ? (
-                            <div className="text-center py-4">
-                              <div className="text-red-500 text-sm">{weatherError}</div>
+                            <div className="text-center py-6">
+                              <div className="text-red-500 text-sm mb-3">{weatherError}</div>
                               <button 
                                 onClick={fetchWeatherData}
-                                className="text-blue-600 text-sm mt-2 hover:underline"
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors"
                               >
                                 Coba lagi
                               </button>
                             </div>
                           ) : weatherData && weatherData.current ? (
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-center p-4 bg-blue-50 rounded-lg">
-                                <div className="text-4xl mr-3">{getWeatherEmoji(weatherData.current.weather[0].main)}</div>
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-center p-6 bg-blue-50 rounded-xl">
+                                <div className="text-5xl mr-4">{getWeatherEmoji(weatherData.current.weather[0].main)}</div>
                                 <div>
-                                  <div className="text-2xl font-bold text-gray-900">
+                                  <div className="text-3xl font-bold text-gray-900">
                                     {Math.round(weatherData.current.temp)}°C
                                   </div>
-                                  <div className="text-sm text-gray-600 capitalize">
+                                  <div className="text-gray-600 capitalize">
                                     {weatherData.current.weather[0].description}
                                   </div>
                                 </div>
                               </div>
                               
                               <div className="grid grid-cols-2 gap-3 text-sm">
-                                <div className="bg-gray-50 p-2 rounded">
-                                  <div className="text-gray-600">Terasa Seperti</div>
-                                  <div className="font-semibold">{Math.round(weatherData.current.feels_like)}°C</div>
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                  <div className="text-gray-600 text-xs">Terasa Seperti</div>
+                                  <div className="font-semibold text-lg">{Math.round(weatherData.current.feels_like)}°C</div>
                                 </div>
-                                <div className="bg-gray-50 p-2 rounded">
-                                  <div className="text-gray-600">Kelembaban</div>
-                                  <div className="font-semibold">{weatherData.current.humidity}%</div>
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                  <div className="text-gray-600 text-xs">Kelembaban</div>
+                                  <div className="font-semibold text-lg">{weatherData.current.humidity}%</div>
                                 </div>
-                                <div className="bg-gray-50 p-2 rounded">
-                                  <div className="text-gray-600">Angin</div>
-                                  <div className="font-semibold">{weatherData.current.wind_speed || 0} m/s</div>
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                  <div className="text-gray-600 text-xs">Angin</div>
+                                  <div className="font-semibold text-lg">{weatherData.current.wind_speed || 0} m/s</div>
                                 </div>
-                                <div className="bg-gray-50 p-2 rounded">
-                                  <div className="text-gray-600">Tekanan</div>
-                                  <div className="font-semibold">{weatherData.current.pressure} hPa</div>
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                  <div className="text-gray-600 text-xs">Tekanan</div>
+                                  <div className="font-semibold text-lg">{weatherData.current.pressure} hPa</div>
                                 </div>
                               </div>
                               
                               {weatherData.alerts && weatherData.alerts.length > 0 && (
-                                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                                  <div className="text-red-800 font-semibold text-sm mb-1">⚠️ Peringatan Cuaca</div>
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                  <div className="text-red-800 font-semibold mb-2">⚠️ Peringatan Cuaca</div>
                                   {weatherData.alerts.map((alert, index) => (
-                                    <div key={index} className="text-red-700 text-xs">
+                                    <div key={index} className="text-red-700 text-sm">
                                       <div className="font-medium">{alert.event}</div>
                                       <div className="mt-1">{alert.description}</div>
                                     </div>
@@ -1599,97 +1855,242 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                                 </div>
                               )}
                               
-                              <div className="bg-yellow-50 p-3 rounded-lg">
-                                <div className="text-xs text-gray-600 mb-1">Matahari</div>
-                                <div className="flex justify-between text-sm">
-                                  <span>🌅 {formatTime(weatherData.current.sunrise)}</span>
-                                  <span>🌇 {formatTime(weatherData.current.sunset)}</span>
+                              <div className="bg-yellow-50 p-4 rounded-lg">
+                                <div className="text-sm text-gray-600 mb-2">Matahari</div>
+                                <div className="flex justify-between">
+                                  <span className="text-sm">🌅 {formatTime(weatherData.current.sunrise)}</span>
+                                  <span className="text-sm">🌇 {formatTime(weatherData.current.sunset)}</span>
                                 </div>
                               </div>
                               
-                              <div className="text-xs text-gray-500 text-center mt-3">
+                              <div className="text-xs text-gray-500 text-center">
                                 Data dari OpenWeatherMap
                               </div>
                             </div>
                           ) : (
-                            <div className="text-center py-4">
-                              <div className="text-gray-500 text-sm">Data cuaca tidak tersedia</div>
+                            <div className="text-center py-6">
+                              <div className="text-gray-500 mb-3">Data cuaca tidak tersedia</div>
                               <button 
                                 onClick={fetchWeatherData}
-                                className="text-blue-600 text-sm mt-2 hover:underline"
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors"
                               >
                                 Muat data cuaca
                               </button>
                             </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                    
-                    {/* Style Control */}
-                    <div className="absolute bottom-4 left-4 z-10">
-                      <button
-                        onClick={toggleStyleBox}
-                        disabled={!mapLoaded}
-                        className="p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Ubah Gaya Peta"
-                      >
-                        <MapStyleIcon />
-                      </button>
-                      
-                      {showStyleBox && (
-                        <div className="absolute bottom-12 left-0 bg-white rounded-lg shadow-xl p-3 w-40 animate-fade-in">
-                          <div className="flex justify-between items-center mb-2">
-                            <h4 className="font-semibold text-gray-900 text-sm">Gaya Peta</h4>
+                      </div>
+                    )}
+
+                    {/* Desktop Weather Info Box */}
+                    {!isMobile && showWeatherInfo && (
+                      <div className="absolute top-0 left-16 bg-white rounded-lg shadow-xl p-4 w-80 animate-fade-in z-20">
+                        <div className="flex justify-between items-center mb-3">
+                          <h4 className="font-semibold text-gray-900">Cuaca di {mountain.kota}</h4>
+                          <button 
+                            onClick={toggleWeatherBox}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        
+                        {weatherLoading ? (
+                          <div className="text-center py-4">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            <div className="text-sm text-gray-600 mt-2">Mengambil data cuaca...</div>
+                          </div>
+                        ) : weatherError ? (
+                          <div className="text-center py-4">
+                            <div className="text-red-500 text-sm">{weatherError}</div>
                             <button 
-                              onClick={toggleStyleBox}
-                              className="text-gray-400 hover:text-gray-600 text-sm"
+                              onClick={fetchWeatherData}
+                              className="text-blue-600 text-sm mt-2 hover:underline"
                             >
-                              ✕
+                              Coba lagi
                             </button>
                           </div>
-                          
-                          <div className="space-y-1">
-                            {[
-                              { id: 'outdoor', name: 'Outdoor' },
-                              { id: 'streets', name: 'Streets' },
-                              { id: 'satellite', name: 'Satellite' }
-                            ].map((style) => (
-                              <button
-                                key={style.id}
-                                onClick={() => changeMapStyle(style.id)}
-                                disabled={!mapLoaded || styleChangeInProgress}
-                                className={`w-full flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-                                  mapStyle === style.id ? 'ring-2 ring-green-500 bg-green-50' : ''
-                                } ${styleChangeInProgress ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              >
-                                <div className={`w-6 h-6 rounded border-2 ${
-                                  mapStyle === style.id ? 'border-green-500' : 'border-gray-300'
-                                }`}>
-                                  {mapStyle === style.id && (
-                                    <div className="w-full h-full bg-green-500 rounded flex items-center justify-center">
-                                      <span className="text-white text-xs">✓</span>
-                                    </div>
-                                  )}
+                        ) : weatherData && weatherData.current ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-center p-4 bg-blue-50 rounded-lg">
+                              <div className="text-4xl mr-3">{getWeatherEmoji(weatherData.current.weather[0].main)}</div>
+                              <div>
+                                <div className="text-2xl font-bold text-gray-900">
+                                  {Math.round(weatherData.current.temp)}°C
                                 </div>
-                                <span className="text-sm font-medium">{style.name}</span>
-                              </button>
-                            ))}
+                                <div className="text-sm text-gray-600 capitalize">
+                                  {weatherData.current.weather[0].description}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                              <div className="bg-gray-50 p-2 rounded">
+                                <div className="text-gray-600">Terasa Seperti</div>
+                                <div className="font-semibold">{Math.round(weatherData.current.feels_like)}°C</div>
+                              </div>
+                              <div className="bg-gray-50 p-2 rounded">
+                                <div className="text-gray-600">Kelembaban</div>
+                                <div className="font-semibold">{weatherData.current.humidity}%</div>
+                              </div>
+                              <div className="bg-gray-50 p-2 rounded">
+                                <div className="text-gray-600">Angin</div>
+                                <div className="font-semibold">{weatherData.current.wind_speed || 0} m/s</div>
+                              </div>
+                              <div className="bg-gray-50 p-2 rounded">
+                                <div className="text-gray-600">Tekanan</div>
+                                <div className="font-semibold">{weatherData.current.pressure} hPa</div>
+                              </div>
+                            </div>
+                            
+                            {weatherData.alerts && weatherData.alerts.length > 0 && (
+                              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                                <div className="text-red-800 font-semibold text-sm mb-1">⚠️ Peringatan Cuaca</div>
+                                {weatherData.alerts.map((alert, index) => (
+                                  <div key={index} className="text-red-700 text-xs">
+                                    <div className="font-medium">{alert.event}</div>
+                                    <div className="mt-1">{alert.description}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            <div className="bg-yellow-50 p-3 rounded-lg">
+                              <div className="text-xs text-gray-600 mb-1">Matahari</div>
+                              <div className="flex justify-between text-sm">
+                                <span>🌅 {formatTime(weatherData.current.sunrise)}</span>
+                                <span>🌇 {formatTime(weatherData.current.sunset)}</span>
+                              </div>
+                            </div>
+                            
+                            <div className="text-xs text-gray-500 text-center mt-3">
+                              Data dari OpenWeatherMap
+                            </div>
                           </div>
+                        ) : (
+                          <div className="text-center py-4">
+                            <div className="text-gray-500 text-sm">Data cuaca tidak tersedia</div>
+                            <button 
+                              onClick={fetchWeatherData}
+                              className="text-blue-600 text-sm mt-2 hover:underline"
+                            >
+                              Muat data cuaca
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Mobile Style Control Bottom Sheet */}
+                    {isMobile && showStyleBox && (
+                      <div className="mobile-style-overlay">
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="font-semibold text-gray-900 text-lg">Gaya Peta</h4>
+                          <button 
+                            onClick={toggleStyleBox}
+                            className="text-gray-400 hover:text-gray-600 p-1"
+                          >
+                            <CloseIcon />
+                          </button>
                         </div>
-                      )}
-                    </div>
+                        
+                        <div className="grid grid-cols-3 gap-3">
+                          {[
+                            { id: 'outdoor', name: 'Outdoor' },
+                            { id: 'streets', name: 'Streets' },
+                            { id: 'satellite', name: 'Satellite' }
+                          ].map((style) => (
+                            <button
+                              key={style.id}
+                              onClick={() => {
+                                changeMapStyle(style.id);
+                                setShowStyleBox(false);
+                              }}
+                              disabled={!mapLoaded || styleChangeInProgress}
+                              className={`flex flex-col items-center space-y-2 p-4 rounded-lg border-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                mapStyle === style.id ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:bg-gray-50'
+                              } ${styleChangeInProgress ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              <div className={`w-8 h-8 rounded border-2 ${
+                                mapStyle === style.id ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                              } flex items-center justify-center`}>
+                                {mapStyle === style.id && (
+                                  <span className="text-white text-sm">✓</span>
+                                )}
+                              </div>
+                              <span className="text-sm font-medium">{style.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Desktop Style Control */}
+                    {!isMobile && (
+                      <div className="absolute bottom-4 left-4 z-10">
+                        <button
+                          onClick={toggleStyleBox}
+                          disabled={!mapLoaded}
+                          className="p-2 bg-white rounded-lg shadow-lg hover:bg-gray-50 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Ubah Gaya Peta"
+                        >
+                          <MapStyleIcon />
+                        </button>
+                        
+                        {showStyleBox && (
+                          <div className="absolute bottom-12 left-0 bg-white rounded-lg shadow-xl p-3 w-40 animate-fade-in">
+                            <div className="flex justify-between items-center mb-2">
+                              <h4 className="font-semibold text-gray-900 text-sm">Gaya Peta</h4>
+                              <button 
+                                onClick={toggleStyleBox}
+                                className="text-gray-400 hover:text-gray-600 text-sm"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            
+                            <div className="space-y-1">
+                              {[
+                                { id: 'outdoor', name: 'Outdoor' },
+                                { id: 'streets', name: 'Streets' },
+                                { id: 'satellite', name: 'Satellite' }
+                              ].map((style) => (
+                                <button
+                                  key={style.id}
+                                  onClick={() => changeMapStyle(style.id)}
+                                  disabled={!mapLoaded || styleChangeInProgress}
+                                  className={`w-full flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                    mapStyle === style.id ? 'ring-2 ring-green-500 bg-green-50' : ''
+                                  } ${styleChangeInProgress ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                  <div className={`w-6 h-6 rounded border-2 ${
+                                    mapStyle === style.id ? 'border-green-500' : 'border-gray-300'
+                                  }`}>
+                                    {mapStyle === style.id && (
+                                      <div className="w-full h-full bg-green-500 rounded flex items-center justify-center">
+                                        <span className="text-white text-xs">✓</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className="text-sm font-medium">{style.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
             
             {/* Sidebar */}
-            <div className="lg:col-span-1">
+            <div className={`${isMobile ? 'order-3' : 'lg:col-span-1'}`}>
               {/* Trail Statistics */}
               {trailDistance && (
-                <div className="bg-white rounded-2xl shadow-sm p-6 mb-6 animate-fade-in-up">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                <div className={`bg-white rounded-2xl shadow-sm ${isMobile ? 'p-4 mb-4' : 'p-6 mb-6'} animate-fade-in-up`}>
+                  <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-gray-900 mb-4 flex items-center`}>
                     <span className="w-1 h-6 bg-green-500 rounded-full mr-3"></span>
                     Statistik Jalur
                   </h3>
@@ -1698,9 +2099,9 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                       <div className="flex items-center justify-between">
                         <div className="flex items-center">
                           <RouteIcon />
-                          <span className="ml-2 text-gray-700">Panjang Total</span>
+                          <span className={`ml-2 text-gray-700 ${isMobile ? 'text-sm' : ''}`}>Panjang Total</span>
                         </div>
-                        <span className="font-bold text-green-600">
+                        <span className={`font-bold text-green-600 ${isMobile ? 'text-sm' : ''}`}>
                           {trailDistance >= 1 ? `${trailDistance.toFixed(1)} km` : `${(trailDistance * 1000).toFixed(0)} m`}
                         </span>
                       </div>
@@ -1711,9 +2112,9 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
                             <ElevationIcon />
-                            <span className="ml-2 text-gray-700">Ketinggian Puncak</span>
+                            <span className={`ml-2 text-gray-700 ${isMobile ? 'text-sm' : ''}`}>Ketinggian Puncak</span>
                           </div>
-                          <span className="font-bold text-purple-600">
+                          <span className={`font-bold text-purple-600 ${isMobile ? 'text-sm' : ''}`}>
                             {mountain.elevation >= 1000 ? `${(mountain.elevation / 1000).toFixed(1)} km` : `${mountain.elevation} m`}
                           </span>
                         </div>
@@ -1723,8 +2124,8 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                     {/* Elevation Statistics */}
                     {pointsWithElevation.length > 0 && (
                       <div className="bg-orange-50 rounded-lg p-4">
-                        <div className="text-sm font-semibold text-orange-800 mb-2">📊 Statistik Ketinggian Titik</div>
-                        <div className="space-y-1 text-xs">
+                        <div className={`font-semibold text-orange-800 mb-2 ${isMobile ? 'text-sm' : 'text-sm'}`}>📊 Statistik Ketinggian Titik</div>
+                        <div className={`space-y-1 ${isMobile ? 'text-xs' : 'text-xs'}`}>
                           {(() => {
                             const validElevations = pointsWithElevation
                               .filter(p => p.elevation !== null && !p.elevationError)
@@ -1771,9 +2172,9 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
                             <ClockIcon />
-                            <span className="ml-2 text-gray-700">Estimasi Waktu</span>
+                            <span className={`ml-2 text-gray-700 ${isMobile ? 'text-sm' : ''}`}>Estimasi Waktu</span>
                           </div>
-                          <span className="font-bold text-red-600">{mountain.estimated_time}</span>
+                          <span className={`font-bold text-red-600 ${isMobile ? 'text-sm' : ''}`}>{mountain.estimated_time}</span>
                         </div>
                       </div>
                     )}
@@ -1782,24 +2183,24 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
               )}
               
               {/* Weather Info Card */}
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 animate-fade-in-up mb-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Info Cuaca</h3>
-                <p className="text-gray-600 mb-3">
+              <div className={`bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl ${isMobile ? 'p-4 mb-4' : 'p-6 mb-6'} animate-fade-in-up`}>
+                <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-gray-900 mb-4`}>Info Cuaca</h3>
+                <p className={`text-gray-600 mb-3 ${isMobile ? 'text-sm' : ''}`}>
                   Cek prakiraan cuaca terbaru sebelum mendaki untuk keselamatan Anda.
                 </p>
                 
                 {/* Current Weather Quick View */}
                 {weatherData && weatherData.current && weatherData.current.weather && weatherData.current.weather[0] && (
-                  <div className="bg-white rounded-lg p-3 mb-3">
+                  <div className={`bg-white rounded-lg ${isMobile ? 'p-2 mb-2' : 'p-3 mb-3'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <span className="text-2xl mr-2">{getWeatherEmoji(weatherData.current.weather[0].main)}</span>
+                        <span className={`${isMobile ? 'text-xl mr-2' : 'text-2xl mr-2'}`}>{getWeatherEmoji(weatherData.current.weather[0].main)}</span>
                         <div>
-                          <div className="font-semibold">{Math.round(weatherData.current.temp)}°C</div>
-                          <div className="text-xs text-gray-500 capitalize">{weatherData.current.weather[0].description}</div>
+                          <div className={`font-semibold ${isMobile ? 'text-sm' : ''}`}>{Math.round(weatherData.current.temp)}°C</div>
+                          <div className={`text-gray-500 capitalize ${isMobile ? 'text-xs' : 'text-xs'}`}>{weatherData.current.weather[0].description}</div>
                         </div>
                       </div>
-                      <div className="text-right text-xs text-gray-500">
+                      <div className={`text-right ${isMobile ? 'text-xs' : 'text-xs'} text-gray-500`}>
                         <div>💧 {weatherData.current.humidity}%</div>
                         <div>💨 {weatherData.current.wind_speed || 0} m/s</div>
                         <div>☀️ UV: {weatherData.current.uvi || 0}</div>
@@ -1808,7 +2209,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                     
                     {/* Weather Alert Badge */}
                     {weatherData.alerts && weatherData.alerts.length > 0 && (
-                      <div className="mt-2 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full inline-block">
+                      <div className={`mt-2 px-2 py-1 bg-red-100 text-red-800 ${isMobile ? 'text-xs' : 'text-xs'} rounded-full inline-block`}>
                         ⚠️ {weatherData.alerts.length} Peringatan Cuaca
                       </div>
                     )}
@@ -1819,7 +2220,7 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
                   href={`https://www.bmkg.go.id/cuaca/prakiraan-cuaca.bmkg?Kota=${mountain.kota}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
+                  className={`inline-flex items-center text-blue-600 hover:text-blue-700 font-medium ${isMobile ? 'text-sm' : ''}`}
                 >
                   Lihat Prakiraan Lengkap
                   <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1830,21 +2231,21 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
               
               {/* Trail Segments Information */}
               {trailSegments.length > 0 && (
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 animate-fade-in-up mb-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Segmen Jalur</h3>
+                <div className={`bg-gradient-to-br from-green-50 to-green-100 rounded-2xl ${isMobile ? 'p-4 mb-4' : 'p-6 mb-6'} animate-fade-in-up`}>
+                  <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-gray-900 mb-4`}>Segmen Jalur</h3>
                   <div className="space-y-3">
                     {trailSegments.map((segment, index) => (
-                      <div key={index} className="bg-white rounded-lg p-3 border border-green-200">
+                      <div key={index} className={`bg-white rounded-lg ${isMobile ? 'p-2' : 'p-3'} border border-green-200`}>
                         <div className="flex justify-between items-start">
                           <div>
-                            <h4 className="font-semibold text-gray-900">{segment.name}</h4>
-                            <p className="text-sm text-gray-600">{segment.description}</p>
+                            <h4 className={`font-semibold text-gray-900 ${isMobile ? 'text-sm' : ''}`}>{segment.name}</h4>
+                            <p className={`text-gray-600 ${isMobile ? 'text-xs' : 'text-sm'}`}>{segment.description}</p>
                           </div>
                           <div className="text-right">
-                            <div className="font-bold text-green-600">
+                            <div className={`font-bold text-green-600 ${isMobile ? 'text-sm' : ''}`}>
                               {segment.distance.toFixed(2)} km
                             </div>
-                            <div className="text-xs text-gray-500">Panjang</div>
+                            <div className={`text-gray-500 ${isMobile ? 'text-xs' : 'text-xs'}`}>Panjang</div>
                           </div>
                         </div>
                       </div>
@@ -1855,30 +2256,30 @@ export default function Mountain({ mountain, directusData, directusPoints, direc
               
               {/* Points with Elevation Information */}
               {pointsWithElevation.length > 0 && (
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl p-6 animate-fade-in-up">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Titik Penting</h3>
-                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                <div className={`bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl ${isMobile ? 'p-4' : 'p-6'} animate-fade-in-up`}>
+                  <h3 className={`${isMobile ? 'text-base' : 'text-lg'} font-bold text-gray-900 mb-4`}>Titik Penting</h3>
+                  <div className={`space-y-3 ${isMobile ? 'max-h-48' : 'max-h-64'} overflow-y-auto`}>
                     {pointsWithElevation.map((point, index) => (
-                      <div key={index} className="bg-white rounded-lg p-3 border border-orange-200">
+                      <div key={index} className={`bg-white rounded-lg ${isMobile ? 'p-2' : 'p-3'} border border-orange-200`}>
                         <div className="flex justify-between items-start">
                           <div>
-                            <h4 className="font-semibold text-gray-900">{point.name}</h4>
-                            <p className="text-sm text-gray-600">{point.description || 'Tidak ada deskripsi'}</p>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <h4 className={`font-semibold text-gray-900 ${isMobile ? 'text-sm' : ''}`}>{point.name}</h4>
+                            <p className={`text-gray-600 ${isMobile ? 'text-xs' : 'text-sm'}`}>{point.description || 'Tidak ada deskripsi'}</p>
+                            <div className={`text-gray-500 mt-1 ${isMobile ? 'text-xs' : 'text-xs'}`}>
                               Koordinat: {parseFloat(point.latitude).toFixed(4)}, {parseFloat(point.longitude).toFixed(4)}
                             </div>
                           </div>
                           <div className="text-right">
                             {point.elevation !== null && !point.elevationError ? (
-                              <div className="font-bold text-orange-600">
+                              <div className={`font-bold text-orange-600 ${isMobile ? 'text-sm' : ''}`}>
                                 {Math.round(point.elevation)} m
                               </div>
                             ) : elevationLoading ? (
-                              <div className="text-xs text-gray-500">Loading...</div>
+                              <div className={`text-gray-500 ${isMobile ? 'text-xs' : 'text-xs'}`}>Loading...</div>
                             ) : (
-                              <div className="text-xs text-gray-400">N/A</div>
+                              <div className={`text-gray-400 ${isMobile ? 'text-xs' : 'text-xs'}`}>N/A</div>
                             )}
-                            <div className="text-xs text-gray-500">Ketinggian</div>
+                            <div className={`text-gray-500 ${isMobile ? 'text-xs' : 'text-xs'}`}>Ketinggian</div>
                           </div>
                         </div>
                       </div>

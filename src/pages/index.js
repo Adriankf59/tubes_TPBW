@@ -295,9 +295,10 @@ export default function Home({ mountains = [], error }) {
   const [filteredMountains, setFilteredMountains] = useState([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [provinceDropdownOpen, setProvinceDropdownOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const searchRef = useRef(null);
+  const provinceRef = useRef(null);
   
   // Increased items per page to better display all mountains
   const itemsPerPage = 8;
@@ -314,6 +315,9 @@ export default function Home({ mountains = [], error }) {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
+      if (provinceRef.current && !provinceRef.current.contains(event.target)) {
+        setProvinceDropdownOpen(false);
+      }
     };
     
     document.addEventListener('mousedown', handleClickOutside);
@@ -329,7 +333,10 @@ export default function Home({ mountains = [], error }) {
   }, [mountains]);
   
   const uniqueProvinces = useMemo(() => {
-    return ["All", ...new Set(safeMountains.map(m => m?.provinsi).filter(Boolean))].sort();
+    const provinces = [...new Set(safeMountains.map(m => m?.provinsi).filter(Boolean))];
+    // Sort provinces alphabetically, but keep "All" at the beginning
+    provinces.sort((a, b) => a.localeCompare(b, 'id-ID'));
+    return ["All", ...provinces];
   }, [safeMountains]);
   
   const provinceCounts = useMemo(() => {
@@ -388,14 +395,11 @@ export default function Home({ mountains = [], error }) {
     setCurrentPage(Math.min(totalPages - 1, currentPage + 1));
   }, [currentPage, totalPages]);
   
-  const handleProvinceChange = useCallback((e) => {
-    setSelectedProvince(e.target.value);
+  const handleProvinceChange = useCallback((province) => {
+    setSelectedProvince(province);
     setCurrentPage(0);
+    setProvinceDropdownOpen(false);
   }, []);
-  
-  const toggleMobileMenu = useCallback(() => {
-    setMobileMenuOpen(!mobileMenuOpen);
-  }, [mobileMenuOpen]);
   
   return (
     <>
@@ -499,49 +503,7 @@ export default function Home({ mountains = [], error }) {
                   <span className="ml-2">TrailView ID</span>
                 </h1>
               </div>
-              
-              <nav className="hidden md:flex items-center space-x-8">
-                {['Explore', 'Saved', 'Maps', 'Community'].map((item) => (
-                  <button 
-                    key={item}
-                    className="font-medium flex items-center transition-all duration-300 hover:scale-105 text-white hover:text-green-300 drop-shadow-lg"
-                  >
-                    {item}
-                    {(item === 'Explore' || item === 'Saved') && <ChevronRightIcon />}
-                  </button>
-                ))}
-              </nav>
-              
-              <div className="flex items-center">
-                <button 
-                  className="md:hidden transition-transform duration-300 hover:scale-110"
-                  onClick={toggleMobileMenu}
-                >
-                  {mobileMenuOpen ? (
-                    <CloseIcon className="text-white drop-shadow-lg" />
-                  ) : (
-                    <MenuIcon className="text-white drop-shadow-lg" />
-                  )}
-                </button>
-              </div>
             </div>
-          </div>
-          
-          {/* Mobile Menu */}
-          <div className={`md:hidden bg-black/80 backdrop-blur-md border-t border-white/20 overflow-hidden transition-all duration-500 ${
-            mobileMenuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'
-          }`}>
-            <nav className="py-4 px-4 space-y-2">
-              {['Explore', 'Saved', 'Maps', 'Community'].map((item) => (
-                <a 
-                  key={item} 
-                  href="#" 
-                  className="block py-3 text-white hover:text-green-300 font-medium transition-all duration-300 hover:translate-x-2"
-                >
-                  {item}
-                </a>
-              ))}
-            </nav>
           </div>
         </header>
         
@@ -555,13 +517,13 @@ export default function Home({ mountains = [], error }) {
           />
           
           <div className="relative z-10 text-center text-white max-w-4xl mx-auto px-4">
-            <h1 className="text-5xl md:text-7xl font-bold mb-4">
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold mb-4">
               Temukan <span className="text-green-400">Jalur Pendakian</span>
             </h1>
-            <h2 className="text-3xl md:text-5xl font-bold mb-8">
+            <h2 className="text-2xl sm:text-3xl md:text-5xl font-bold mb-8">
               Gunung Indonesia
             </h2>
-            <p className="text-xl md:text-2xl mb-8 text-gray-200">
+            <p className="text-lg sm:text-xl md:text-2xl mb-8 text-gray-200">
               Database terlengkap informasi pendakian gunung di Nusantara
             </p>
             
@@ -575,7 +537,7 @@ export default function Home({ mountains = [], error }) {
                   placeholder="Cari nama gunung, kota, atau provinsi..."
                   value={searchTerm}
                   onChange={handleSearchChange}
-                  className="w-full pl-12 pr-4 py-4 rounded-full text-gray-800 text-lg shadow-2xl focus:outline-none focus:ring-4 focus:ring-green-400 focus:ring-opacity-50 transition-all duration-300"
+                  className="w-full pl-12 pr-4 py-4 rounded-full text-gray-800 text-base sm:text-lg shadow-2xl focus:outline-none focus:ring-4 focus:ring-green-400 focus:ring-opacity-50 transition-all duration-300"
                   aria-label="Cari jalur pendakian gunung"
                 />
               </div>
@@ -620,7 +582,7 @@ export default function Home({ mountains = [], error }) {
             </div>
             
             <nav className="mt-6" aria-label="Quick links">
-              <a href="#trails" className="text-white underline hover:no-underline text-lg transition-all duration-300 hover:scale-105">
+              <a href="#trails" className="text-white underline hover:no-underline text-base sm:text-lg transition-all duration-300 hover:scale-105">
                 Jelajahi jalur pendakian terdekat
               </a>
             </nav>
@@ -628,44 +590,74 @@ export default function Home({ mountains = [], error }) {
         </section>
         
         {/* Trails Section */}
-        <section id="trails" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="mb-10">
-            <h2 className="text-4xl font-bold text-gray-900 mb-2">
+        <section id="trails" className="py-10 sm:py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+          <div className="mb-10 text-center sm:text-left">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
               Jalur Pendakian Gunung Populer di <span className="text-green-600">Indonesia</span>
             </h2>
-            <p className="text-gray-600 text-lg">Jelajahi semua {safeMountains.length} gunung dengan jalur pendakian resmi di seluruh Nusantara</p>
+            <p className="text-gray-600 text-base sm:text-lg">Jelajahi semua {safeMountains.length} gunung dengan jalur pendakian resmi di seluruh Nusantara</p>
           </div>
           
           {/* SEO Content Section */}
           <div className="mb-12 prose prose-lg max-w-none">
-            <p className="text-gray-700 leading-relaxed">
+            <p className="text-gray-700 leading-relaxed text-sm sm:text-base">
               Indonesia memiliki lebih dari 400 gunung yang tersebar di berbagai pulau, menjadikannya surga bagi para pendaki dan pecinta alam. 
               Dari Sabang sampai Merauke, setiap gunung menawarkan keunikan tersendiri dengan jalur pendakian yang menantang dan pemandangan yang memukau.
             </p>
           </div>
           
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
+          <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0 gap-4 mb-8">
+            <div className="w-full sm:w-auto" ref={provinceRef}>
               <label htmlFor="province-filter" className="block text-sm font-medium text-gray-700 mb-2">
                 Filter berdasarkan Provinsi
               </label>
-              <select
-                id="province-filter"
-                value={selectedProvince}
-                onChange={handleProvinceChange}
-                className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-300 hover:border-gray-400"
-                aria-label="Filter gunung berdasarkan provinsi"
-              >
-                {uniqueProvinces.map(province => (
-                  <option key={province} value={province}>
-                    {province} {province === "All" ? `(${safeMountains.length} gunung)` : `(${provinceCounts[province] || 0} gunung)`}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setProvinceDropdownOpen(!provinceDropdownOpen)}
+                  className="w-full sm:w-auto min-w-[200px] px-4 py-2.5 text-left bg-white border border-gray-300 rounded-lg shadow-sm hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-300 flex items-center justify-between"
+                  aria-label="Filter gunung berdasarkan provinsi"
+                  aria-expanded={provinceDropdownOpen}
+                  aria-haspopup="listbox"
+                >
+                  <span className="text-sm sm:text-base text-gray-700">
+                    {selectedProvince === "All" ? "Semua Provinsi" : selectedProvince} 
+                    <span className="text-gray-500 ml-1">({selectedProvince === "All" ? safeMountains.length : provinceCounts[selectedProvince] || 0})</span>
+                  </span>
+                  <svg className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${provinceDropdownOpen ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {/* Dropdown Menu */}
+                <div className={`absolute z-20 w-full sm:w-auto sm:min-w-[250px] mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden transition-all duration-300 ${
+                  provinceDropdownOpen ? 'max-h-64 opacity-100 visible' : 'max-h-0 opacity-0 invisible'
+                }`}>
+                  <div className="max-h-60 overflow-y-auto">
+                    {uniqueProvinces.map(province => (
+                      <button
+                        key={province}
+                        type="button"
+                        onClick={() => handleProvinceChange(province)}
+                        className={`w-full px-4 py-3 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors duration-150 flex items-center justify-between ${
+                          selectedProvince === province ? 'bg-green-50 text-green-700 font-medium' : 'text-gray-700'
+                        }`}
+                        role="option"
+                        aria-selected={selectedProvince === province}
+                      >
+                        <span>{province === "All" ? "Semua Provinsi" : province}</span>
+                        <span className={`text-xs ${selectedProvince === province ? 'text-green-600' : 'text-gray-500'}`}>
+                          ({province === "All" ? safeMountains.length : provinceCounts[province] || 0})
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
             
             {totalPages > 1 && (
-              <nav className="flex items-center space-x-3" aria-label="Pagination">
+              <nav className="flex items-center justify-center sm:justify-end space-x-3" aria-label="Pagination">
                 <button
                   onClick={handlePreviousPage}
                   disabled={currentPage === 0}
@@ -691,19 +683,6 @@ export default function Home({ mountains = [], error }) {
             )}
           </div>
           
-          {/* Mountains count info */}
-          <div className="mb-8">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 max-w-2xl">
-              <p className="text-green-800 text-sm">
-                <strong>Menampilkan semua {displayedMountains.length} gunung</strong>
-                {selectedProvince !== "All" && (
-                  <span> di {selectedProvince}</span>
-                )}
-                . Gunakan pencarian atau filter provinsi untuk menemukan gunung tertentu.
-              </p>
-            </div>
-          </div>
-          
           {error ? (
             <div className="text-center py-12">
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md mx-auto">
@@ -720,7 +699,7 @@ export default function Home({ mountains = [], error }) {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" role="list">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6" role="list">
               {currentMountains.map((mountain, index) => (
                 <article key={mountain?.id || `mountain-${index}`} role="listitem">
                   <TrailCard 
@@ -734,24 +713,24 @@ export default function Home({ mountains = [], error }) {
           )}
           
           {/* Additional SEO Content */}
-          <div className="mt-16 grid md:grid-cols-3 gap-8">
+          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-8">
             <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="text-xl font-semibold mb-3 text-gray-900">Gunung Tertinggi di Jawa</h3>
-              <p className="text-gray-600">
+              <h3 className="text-lg sm:text-xl font-semibold mb-3 text-gray-900">Gunung Tertinggi di Jawa</h3>
+              <p className="text-gray-600 text-sm sm:text-base">
                 Pulau Jawa memiliki beberapa gunung tertinggi seperti Gunung Semeru (3.676 mdpl), 
                 Gunung Slamet (3.428 mdpl), dan Gunung Lawu (3.265 mdpl) yang menjadi favorit para pendaki.
               </p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="text-xl font-semibold mb-3 text-gray-900">Tips Pendakian Aman</h3>
-              <p className="text-gray-600">
+              <h3 className="text-lg sm:text-xl font-semibold mb-3 text-gray-900">Tips Pendakian Aman</h3>
+              <p className="text-gray-600 text-sm sm:text-base">
                 Persiapkan fisik, peralatan, dan logistik dengan baik. Selalu ikuti jalur resmi, 
                 patuhi peraturan setempat, dan jangan tinggalkan sampah di gunung.
               </p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-sm">
-              <h3 className="text-xl font-semibold mb-3 text-gray-900">Musim Pendakian Terbaik</h3>
-              <p className="text-gray-600">
+              <h3 className="text-lg sm:text-xl font-semibold mb-3 text-gray-900">Musim Pendakian Terbaik</h3>
+              <p className="text-gray-600 text-sm sm:text-base">
                 April hingga Oktober adalah waktu terbaik untuk mendaki gunung di Indonesia, 
                 dengan cuaca yang relatif cerah dan minim hujan.
               </p>
@@ -760,32 +739,32 @@ export default function Home({ mountains = [], error }) {
         </section>
         
         {/* Footer */}
-        <footer className="bg-gray-900 text-white py-16 px-4 sm:px-6 lg:px-8">
+        <footer className="bg-gray-900 text-white py-10 sm:py-16 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">
             {/* FAQ Section for SEO */}
-            <div className="mb-12 bg-gray-800 rounded-lg p-8">
-              <h2 className="text-2xl font-bold mb-6">Pertanyaan Umum Seputar Pendakian Gunung di Indonesia</h2>
-              <div className="grid md:grid-cols-2 gap-6">
+            <div className="mb-12 bg-gray-800 rounded-lg p-6 sm:p-8">
+              <h2 className="text-xl sm:text-2xl font-bold mb-6">Pertanyaan Umum Seputar Pendakian Gunung di Indonesia</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="font-semibold mb-2">Kapan waktu terbaik mendaki gunung di Indonesia?</h3>
-                  <p className="text-gray-300 text-sm">Musim kemarau (April-Oktober) adalah waktu ideal untuk mendaki gunung di Indonesia dengan cuaca cerah dan jalur yang kering.</p>
+                  <h3 className="font-semibold mb-2 text-sm sm:text-base">Kapan waktu terbaik mendaki gunung di Indonesia?</h3>
+                  <p className="text-gray-300 text-xs sm:text-sm">Musim kemarau (April-Oktober) adalah waktu ideal untuk mendaki gunung di Indonesia dengan cuaca cerah dan jalur yang kering.</p>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">Apa saja persiapan mendaki gunung untuk pemula?</h3>
-                  <p className="text-gray-300 text-sm">Persiapkan fisik, perlengkapan standar (tas carrier, sleeping bag, matras, jaket), logistik, dan selalu mendaki bersama kelompok.</p>
+                  <h3 className="font-semibold mb-2 text-sm sm:text-base">Apa saja persiapan mendaki gunung untuk pemula?</h3>
+                  <p className="text-gray-300 text-xs sm:text-sm">Persiapkan fisik, perlengkapan standar (tas carrier, sleeping bag, matras, jaket), logistik, dan selalu mendaki bersama kelompok.</p>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">Berapa biaya mendaki gunung di Indonesia?</h3>
-                  <p className="text-gray-300 text-sm">Biaya bervariasi mulai dari Rp 50.000 - Rp 500.000 tergantung lokasi, termasuk tiket masuk, camping, dan porter (opsional).</p>
+                  <h3 className="font-semibold mb-2 text-sm sm:text-base">Berapa biaya mendaki gunung di Indonesia?</h3>
+                  <p className="text-gray-300 text-xs sm:text-sm">Biaya bervariasi mulai dari Rp 50.000 - Rp 500.000 tergantung lokasi, termasuk tiket masuk, camping, dan porter (opsional).</p>
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">Gunung mana yang cocok untuk pendaki pemula?</h3>
-                  <p className="text-gray-300 text-sm">Gunung Prau, Gunung Andong, Gunung Papandayan, dan Gunung Ijen adalah pilihan populer untuk pendaki pemula.</p>
+                  <h3 className="font-semibold mb-2 text-sm sm:text-base">Gunung mana yang cocok untuk pendaki pemula?</h3>
+                  <p className="text-gray-300 text-xs sm:text-sm">Gunung Prau, Gunung Andong, Gunung Papandayan, dan Gunung Ijen adalah pilihan populer untuk pendaki pemula.</p>
                 </div>
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
               {[
                 { 
                   title: 'Jelajahi Gunung', 
@@ -824,14 +803,14 @@ export default function Home({ mountains = [], error }) {
                   ] 
                 }
               ].map((section, index) => (
-                <div key={section.title}>
-                  <h3 className="text-lg font-semibold mb-4">{section.title}</h3>
+                <div key={section.title} className="col-span-1">
+                  <h3 className="text-base sm:text-lg font-semibold mb-4">{section.title}</h3>
                   <ul className="space-y-2 text-gray-400">
                     {section.items.map(item => (
                       <li key={item.text}>
                         <a 
                           href={item.href} 
-                          className="hover:text-white transition-colors duration-300 hover:translate-x-1 inline-block"
+                          className="hover:text-white transition-colors duration-300 hover:translate-x-1 inline-block text-xs sm:text-sm"
                           title={item.text}
                         >
                           {item.text}
@@ -845,22 +824,22 @@ export default function Home({ mountains = [], error }) {
             
             <div className="mt-12 pt-8 border-t border-gray-800">
               <div className="flex flex-col md:flex-row justify-between items-center">
-                <p className="text-gray-400 text-center md:text-left mb-4 md:mb-0">
+                <p className="text-gray-400 text-center md:text-left mb-4 md:mb-0 text-xs sm:text-sm">
                   &copy; 2025 TrailView ID. Hak cipta dilindungi. TrailView ID adalah platform informasi jalur pendakian gunung terlengkap di Indonesia.
                 </p>
                 <div className="flex space-x-6">
                   <a href="https://facebook.com/trailviewid" className="text-gray-400 hover:text-white" aria-label="Facebook TrailView ID">
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                     </svg>
                   </a>
                   <a href="https://instagram.com/trailviewid" className="text-gray-400 hover:text-white" aria-label="Instagram TrailView ID">
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zM5.838 12a6.162 6.162 0 1112.324 0 6.162 6.162 0 01-12.324 0zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
                     </svg>
                   </a>
                   <a href="https://twitter.com/trailviewid" className="text-gray-400 hover:text-white" aria-label="Twitter TrailView ID">
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
                     </svg>
                   </a>
